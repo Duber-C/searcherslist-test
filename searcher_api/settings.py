@@ -38,7 +38,7 @@ DEBUG = env('DEBUG')
 # AI Service Configuration
 CHAT_GPT_SECRET_KEY = env('CHAT_GPT_SECRET_KEY')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
