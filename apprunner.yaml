@@ -8,6 +8,45 @@ build:
       - python3 -m pip install -r requirements.txt
 
 run:
-  command: gunicorn searcher_api.wsgi:application --bind 0.0.0.0:8080
+  command: |
+    python3 manage.py migrate &&
+    gunicorn searcher_api.wsgi:application --bind 0.0.0.0:8080 --workers 2 --threads 4 --timeout 120
   network:
     port: 8080
+
+  env:
+    # Django Settings
+    - name: DJANGO_SETTINGS_MODULE
+      value: "searcher_api.settings"
+    - name: DEBUG
+      value: "True"
+    - name: SECRET_KEY
+      value: "django-insecure-$(vadmjj7o60ur(kglodi%uk+75hzuosqy1jctw#j3d=-5m$a3"
+    - name: ALLOWED_HOSTS
+      value: "*"
+
+    # Email Settings (Gmail)
+    - name: EMAIL_BACKEND
+      value: "django.core.mail.backends.smtp.EmailBackend"
+    - name: EMAIL_HOST
+      value: "smtp.gmail.com"
+    - name: EMAIL_PORT
+      value: "587"
+    - name: EMAIL_USE_TLS
+      value: "True"
+    - name: EMAIL_HOST_USER
+      value: "lbzuluagag@gmail.com"
+    - name: EMAIL_HOST_PASSWORD
+      value: "nkqm cemj kaux ewff"
+    - name: DEFAULT_FROM_EMAIL
+      value: "lbzuluagag@gmail.com"
+
+    # OpenAI
+    - name: CHAT_GPT_SECRET_KEY
+      value: "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"
+
+    # EnrichLayer API Settings
+    - name: ENRICHLAYER_API_KEY
+      value: "x66r_ecrJK7Yql9GvtXUiw"
+    - name: ENRICHLAYER_PROFILE_URL
+      value: "https://enrichlayer.com/api/v2/profile"
