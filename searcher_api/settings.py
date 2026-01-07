@@ -37,6 +37,7 @@ DEBUG = env('DEBUG')
 
 # AI Service Configuration
 CHAT_GPT_SECRET_KEY = env('CHAT_GPT_SECRET_KEY')
+OPENAI_API_KEY = env('OPENAI_API_KEY')
 
 ALLOWED_HOSTS = ["*"]
 
