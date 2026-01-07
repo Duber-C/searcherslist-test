@@ -38,7 +38,7 @@ class User(AbstractUser):
     value_proposition = models.TextField(blank=True, help_text="What unique value do you bring?")
     areas_of_expertise = models.TextField(blank=True, help_text="Your key areas of expertise")
     investment_experience = models.CharField(max_length=100, blank=True, help_text="Years of investment experience")
-    deal_size_preference = models.CharField(max_length=100, blank=True, help_text="Preferred deal size range")
+    deal_size_preference = models.CharField(max_length=200, blank=True, help_text="Preferred deal size range")
     industry_focus = models.TextField(blank=True, help_text="Industries you focus on")
     geographic_focus = models.CharField(max_length=200, blank=True, help_text="Geographic regions of focus")
     
