@@ -4,20 +4,11 @@ runtime: python311
 build:
   commands:
     build:
-      - set -eux
-      - python3 --version
-      - python3 -m venv /app/.venv
-      - /app/.venv/bin/python -m pip install --upgrade pip
-      - /app/.venv/bin/python -m pip install -r requirements.txt
-      - /app/.venv/bin/python -m pip show gunicorn
-      - /app/.venv/bin/python -c "import gunicorn; print('gunicorn import OK')"
+      - pip install -r requirements.txt
 
 run:
-  command: |
-    set -eux
-    /app/.venv/bin/python --version
-    /app/.venv/bin/python -c "import gunicorn; print('gunicorn runtime import OK')"
-    /app/.venv/bin/python manage.py migrate
-    exec /app/.venv/bin/python -m gunicorn searcher_api.wsgi:application --bind 0.0.0.0:8080 --workers 2 --threads 4 --timeout 120
+  runtime-version: 3.11
+  commands: sh start.sh
   network:
-    port: 8080
+    ports:
+      - 8000
