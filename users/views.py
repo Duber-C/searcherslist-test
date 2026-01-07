@@ -76,7 +76,7 @@ class UserListView(generics.ListAPIView):
             return User.objects.filter(id=self.request.user.id)
 
 
-def map_frontend_fields(data):
+def map_frontend_fields(data, updating_existing_user=False):
     """
     Map frontend camelCase fields to backend snake_case fields
     """
@@ -101,9 +101,15 @@ def map_frontend_fields(data):
         backend_field = field_mapping.get(key, key)
         mapped_data[backend_field] = value
     
-    # Auto-generate username from email if not provided
-    if 'email' in mapped_data and 'username' not in mapped_data:
-        mapped_data['username'] = mapped_data['email']
+    # Handle username properly
+    if updating_existing_user:
+        # Remove username completely when updating existing user to avoid constraint issues
+        mapped_data.pop('username', None)
+        print(f"DEBUG: Removed username from data for existing user update")
+    else:
+        # Auto-generate username from email only for new users
+        if 'email' in mapped_data and 'username' not in mapped_data:
+            mapped_data['username'] = mapped_data['email']
     
     return mapped_data
 
@@ -115,40 +121,56 @@ def create_profile(request):
     Create or update user profile
     Handles both new users and users with verified emails
     """
+    print(f"🚀 CREATE_PROFILE called!")
+    print(f"🔍 Raw request.data: {request.data}")
+    print(f"🔍 Request method: {request.method}")
+    print(f"🔍 Content-Type: {request.content_type}")
+    
     # Map frontend fields to backend fields
-    mapped_data = map_frontend_fields(request.data)
+    email = request.data.get('email')
+    user_exists = User.objects.filter(email=email).exists() if email else False
     
-    email = mapped_data.get('email')
+    print(f"📧 Email: {email}")
+    print(f"👤 User exists: {user_exists}")
+    
+    mapped_data = map_frontend_fields(request.data, updating_existing_user=user_exists)
+    print(f"🗺️  Mapped data: {mapped_data}")
+    
     email_verified = mapped_data.get('email_verified') == 'true'
+    print(f"✅ Email verified: {email_verified}")
     
-    if email_verified:
-        # For verified emails, try to update existing user or create new one
-        try:
-            user = User.objects.get(email=email)
-            # Update existing user
-            serializer = UserRegistrationSerializer(
-                user, 
-                data=mapped_data, 
-                partial=True,
-                context={'email_verified': True}
-            )
-        except User.DoesNotExist:
-            # Create new user (email verified via OTP)
+    # Always try to find existing user first
+    try:
+        user = User.objects.get(email=email)
+        print(f"🔄 Updating existing user: {user.email} (ID: {user.id})")
+        # Update existing user (especially for incomplete profiles)
+        serializer = UserRegistrationSerializer(
+            user, 
+            data=mapped_data, 
+            partial=True,
+            context={'email_verified': email_verified, 'updating_existing': True}
+        )
+    except User.DoesNotExist:
+        print(f"🆕 Creating new user for: {email}")
+        # Create new user only if user doesn't exist
+        if email_verified:
             serializer = UserRegistrationSerializer(
                 data=mapped_data,
                 context={'email_verified': True}
             )
-            
-    else:
-        # Regular creation with full validation
-        serializer = UserRegistrationSerializer(data=mapped_data)
+        else:
+            # Regular creation with full validation
+            serializer = UserRegistrationSerializer(data=mapped_data)
     
     if serializer.is_valid():
+        print(f"✅ Serializer is valid!")
         try:
             user = serializer.save()
+            print(f"💾 User saved successfully: {user.email} (ID: {user.id})")
             
             # Mark profile as complete if all required fields are filled
             profile_complete = user.mark_profile_complete()
+            print(f"📋 Profile complete status: {profile_complete}")
             
             return Response({
                 'message': 'Profile saved successfully!',
@@ -167,6 +189,9 @@ def create_profile(request):
             }, status=status.HTTP_201_CREATED)
         
         except Exception as e:
+            print(f"❌ Error saving user: {str(e)}")
+            import traceback
+            print(f"📋 Full traceback: {traceback.format_exc()}")
             return Response({
                 'message': 'Error creating profile. Please try again.',
                 'error': str(e),
@@ -177,6 +202,8 @@ def create_profile(request):
                 }
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    print(f"❌ Serializer validation failed!")
+    print(f"🚫 Serializer errors: {serializer.errors}")
     return Response({
         'message': 'Invalid data provided. Please check your information.',
         'errors': serializer.errors,
@@ -1224,6 +1251,13 @@ def update_profile_section(request, section_name):
             print("DEBUG: Serializer is valid, saving user...")
             updated_user = serializer.save()
             print("DEBUG: User saved successfully!")
+            
+            # Force check and update profile completion status
+            profile_was_completed = updated_user.profile_completed
+            force_profile_complete = updated_user.mark_profile_complete()
+            
+            if not profile_was_completed and force_profile_complete:
+                print(f"DEBUG: Profile completion status updated to True for user {updated_user.email}")
             
             return Response({
                 'status': 'success',

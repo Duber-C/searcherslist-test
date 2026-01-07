@@ -28,24 +28,58 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             'email': {'required': True},
-            'first_name': {'required': True},
-            'last_name': {'required': True},
-            'phone_number': {'required': True},
-            'country': {'required': True},
-            'city': {'required': True},
-            'state': {'required': True},
-            'linkedin_url': {'required': True},
-            'background': {'required': True},
+            'first_name': {'required': False},
+            'last_name': {'required': False},
+            'phone_number': {'required': False},
+            'country': {'required': False},
+            'city': {'required': False},
+            'state': {'required': False},
+            'linkedin_url': {'required': False},
+            'background': {'required': False},
         }
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # If this is an update (instance exists), make most fields optional
+        if self.instance:
+            for field_name, field in self.fields.items():
+                if field_name not in ['email']:  # Keep email as always required
+                    field.required = False
+    
     def validate_email(self, value):
-        """Validate email is unique (unless email is already verified)"""
-        # Check if this is for a verified email (set via context)
-        if self.context.get('email_verified', False):
+        """Validate email is unique (unless email is already verified or updating existing user)"""
+        # Check if this is for a verified email or updating existing user
+        if self.context.get('email_verified', False) or self.context.get('updating_existing', False):
             return value
             
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
+        return value
+    
+    def validate_username(self, value):
+        """Validate username is unique (unless updating existing user)"""
+        # If no value provided, skip validation
+        if not value:
+            return value
+            
+        # If updating existing user and username hasn't changed, allow it
+        if self.instance and self.instance.username == value:
+            return value
+            
+        # If updating existing user with context flag, be more lenient
+        if self.context.get('updating_existing', False):
+            # Still check for uniqueness but exclude current instance
+            if self.instance:
+                if User.objects.filter(username=value).exclude(id=self.instance.id).exists():
+                    raise serializers.ValidationError("A user with that username already exists.")
+            else:
+                if User.objects.filter(username=value).exists():
+                    raise serializers.ValidationError("A user with that username already exists.")
+            return value
+            
+        # For new users, check normal uniqueness
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("A user with that username already exists.")
         return value
     
     def validate_phone_number(self, value):
@@ -113,6 +147,29 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             user.save()
         
         return user
+    
+    def update(self, instance, validated_data):
+        """Update existing user with validated data"""
+        # Remove confirm_password from validated_data
+        validated_data.pop('confirm_password', None)
+        
+        password = validated_data.pop('password', None)
+        
+        # NEVER update username for existing users - completely remove it
+        validated_data.pop('username', None)
+        print(f"DEBUG: Removed username from validated_data during update to prevent constraint violations")
+        
+        # Update user fields
+        for attr, value in validated_data.items():
+            if value is not None and value != '':  # Only update non-empty values
+                setattr(instance, attr, value)
+        
+        # Set password if provided
+        if password:
+            instance.set_password(password)
+        
+        instance.save()
+        return instance
 
 
 class UserSerializer(serializers.ModelSerializer):
