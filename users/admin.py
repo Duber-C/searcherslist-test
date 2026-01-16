@@ -7,8 +7,10 @@ from django.urls import path
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.http import JsonResponse
+from django.core.mail import send_mail
+from django.conf import settings
 from .otp_models import OTP
-from .models import Question
+from .models import Question, Signed_links, OTPVerification
 
 User = get_user_model()
 
@@ -98,7 +100,7 @@ class UserAdmin(BaseUserAdmin):
     
     def professional_experience_display(self, obj):
         """Display professional experience in a formatted way with management controls"""
-        if not obj.professional_experience:
+        if not obj.professional_experience or obj.professional_experience is None or not isinstance(obj.professional_experience, list):
             return format_html(
                 '<p>No professional experience recorded</p>'
                 '<a href="{}add-experience/" class="button">Add Experience</a>',
@@ -110,6 +112,21 @@ class UserAdmin(BaseUserAdmin):
         ]
         
         for i, exp in enumerate(obj.professional_experience):
+            # Skip None entries
+            if exp is None or not isinstance(exp, dict):
+                continue
+            
+            # Safely get values, handling None cases
+            exp_id = exp.get('id', i+1)
+            title = exp.get('title') or 'No Title'
+            company = exp.get('company') or 'No Company'  
+            duration = exp.get('duration') or 'No Duration'
+            description = exp.get('description') or 'No Description'
+            
+            # Safely truncate description
+            description_truncated = description[:200] if description and len(description) > 200 else description
+            ellipsis = '...' if description and len(description) > 200 else ''
+                
             html_parts.append(f"""
             <div style='margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: #f8f9fa; color: #333; position: relative;'>
                 <div style='float: right; margin-left: 10px;'>
@@ -118,9 +135,9 @@ class UserAdmin(BaseUserAdmin):
                     {f'<a href="/admin/users/user/{obj.pk}/move-experience/{i}/up/" class="button">↑</a>' if i > 0 else ''}
                     {f'<a href="/admin/users/user/{obj.pk}/move-experience/{i}/down/" class="button">↓</a>' if i < len(obj.professional_experience) - 1 else ''}
                 </div>
-                <strong style='color: #2c3e50; font-size: 14px;'>{exp.get('id', i+1)}. {exp.get('title', 'No Title')}</strong><br>
-                <em style='color: #555; font-size: 13px;'>{exp.get('company', 'No Company')} ({exp.get('duration', 'No Duration')})</em><br>
-                <p style='margin: 8px 0 0 0; font-size: 12px; color: #666; line-height: 1.4; clear: both;'>{exp.get('description', 'No Description')[:200]}{'...' if len(exp.get('description', '')) > 200 else ''}</p>
+                <strong style='color: #2c3e50; font-size: 14px;'>{exp_id}. {title}</strong><br>
+                <em style='color: #555; font-size: 13px;'>{company} ({duration})</em><br>
+                <p style='margin: 8px 0 0 0; font-size: 12px; color: #666; line-height: 1.4; clear: both;'>{description_truncated}{ellipsis}</p>
             </div>
             """)
         html_parts.append("</div>")
@@ -131,7 +148,7 @@ class UserAdmin(BaseUserAdmin):
     
     def education_display(self, obj):
         """Display education in a formatted way with management controls"""
-        if not obj.education:
+        if not obj.education or obj.education is None or not isinstance(obj.education, list):
             return format_html(
                 '<p>No education recorded</p>'
                 '<a href="{}add-education/" class="button">Add Education</a>',
@@ -143,6 +160,21 @@ class UserAdmin(BaseUserAdmin):
         ]
         
         for i, edu in enumerate(obj.education):
+            # Skip None entries
+            if edu is None or not isinstance(edu, dict):
+                continue
+            
+            # Safely get values, handling None cases
+            degree = edu.get('degree') or 'No Degree'
+            field = edu.get('field') or 'No Field'  
+            school = edu.get('school') or 'No School'
+            years = edu.get('years') or 'No Years'
+            description = edu.get('description') or 'No Description'
+            
+            # Safely truncate description
+            description_truncated = description[:200] if description and len(description) > 200 else description
+            ellipsis = '...' if description and len(description) > 200 else ''
+                
             html_parts.append(f"""
             <div style='margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: #f0f8ff; color: #333; position: relative;'>
                 <div style='float: right; margin-left: 10px;'>
@@ -151,9 +183,9 @@ class UserAdmin(BaseUserAdmin):
                     {f'<a href="/admin/users/user/{obj.pk}/move-education/{i}/up/" class="button">↑</a>' if i > 0 else ''}
                     {f'<a href="/admin/users/user/{obj.pk}/move-education/{i}/down/" class="button">↓</a>' if i < len(obj.education) - 1 else ''}
                 </div>
-                <strong style='color: #1e3a8a; font-size: 14px;'>{edu.get('degree', 'No Degree')} in {edu.get('field', 'No Field')}</strong><br>
-                <em style='color: #555; font-size: 13px;'>{edu.get('school', 'No School')} ({edu.get('years', 'No Years')})</em><br>
-                <p style='margin: 8px 0 0 0; font-size: 12px; color: #666; line-height: 1.4; clear: both;'>{edu.get('description', 'No Description')[:200]}{'...' if len(edu.get('description', '')) > 200 else ''}</p>
+                <strong style='color: #1e3a8a; font-size: 14px;'>{degree} in {field}</strong><br>
+                <em style='color: #555; font-size: 13px;'>{school} ({years})</em><br>
+                <p style='margin: 8px 0 0 0; font-size: 12px; color: #666; line-height: 1.4; clear: both;'>{description_truncated}{ellipsis}</p>
             </div>
             """)
         html_parts.append("</div>")
@@ -691,3 +723,133 @@ class QuestionAdmin(admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         # Make order field editable but show it prominently
         return []
+
+
+@admin.register(Signed_links)
+class SignedLinksAdmin(admin.ModelAdmin):
+    """
+    Admin interface for Signed Links with email sending functionality
+    """
+    list_display = ['email', 'token', 'created_at', 'expires_at', 'used', 'used_at', 'status_display']
+    list_filter = ['used', 'created_at', 'expires_at']
+    search_fields = ['email']
+    readonly_fields = ['token', 'created_at', 'used_at']
+    ordering = ['-created_at']
+    
+    def status_display(self, obj):
+        """Display colored status indicator"""
+        if obj.used:
+            return format_html('<span style="color: red;">Used</span>')
+        elif obj.is_valid():
+            return format_html('<span style="color: green;">Valid</span>')
+        else:
+            return format_html('<span style="color: orange;">Expired</span>')
+    status_display.short_description = 'Status'
+    
+    def save_model(self, request, obj, form, change):
+        """Override save to send email when creating new signed link"""
+        is_new = obj._state.adding
+        super().save_model(request, obj, form, change)
+        
+        if is_new:
+            # Send invitation email
+            self.send_invitation_email(obj)
+            messages.success(request, f"Signed link created and invitation email sent to {obj.email}")
+    
+    def send_invitation_email(self, signed_link):
+        """Send invitation email with signed link"""
+        frontend_url = "http://localhost:3000"  # You can make this configurable
+        # The signed link goes to profile-upload for validation, then redirects to the initial flow
+        invitation_link = f"{frontend_url}/profile-upload?token={signed_link.token}&email={signed_link.email}"
+        
+        subject = "You've been invited to SearcherList!"
+        
+        message = f"""
+Hello,
+
+You have been invited to join SearcherList! 
+
+Please click on the link below to get started:
+{invitation_link}
+
+This link will expire in 24 hours.
+
+Best regards,
+SearcherList Team
+        """
+        
+        html_message = f"""
+<html>
+<body>
+    <h2>You've been invited to SearcherList!</h2>
+    
+    <p>Hello,</p>
+    
+    <p>You have been invited to join SearcherList!</p>
+    
+    <p>Please click on the button below to get started:</p>
+    
+    <div style="margin: 20px 0;">
+        <a href="{invitation_link}" 
+           style="background-color: #007bff; color: white; padding: 10px 20px; 
+                  text-decoration: none; border-radius: 5px; display: inline-block;">
+            Join SearcherList
+        </a>
+    </div>
+    
+    <p>Or copy and paste this link in your browser:</p>
+    <p><a href="{invitation_link}">{invitation_link}</a></p>
+    
+    <p><strong>Note:</strong> This link will expire in 24 hours.</p>
+    
+    <p>Best regards,<br>SearcherList Team</p>
+</body>
+</html>
+        """
+        
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[signed_link.email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+        except Exception as e:
+            print(f"Failed to send email to {signed_link.email}: {str(e)}")
+            # You might want to log this error or handle it differently
+
+
+@admin.register(OTPVerification)
+class OTPVerificationAdmin(admin.ModelAdmin):
+    """
+    Admin interface for OTP Verification codes
+    """
+    list_display = ['email', 'otp_code', 'used', 'is_valid_display', 'created_at', 'expires_at', 'signed_link']
+    list_filter = ['used', 'created_at', 'expires_at']
+    search_fields = ['email', 'otp_code']
+    readonly_fields = ['otp_code', 'created_at', 'expires_at', 'used_at']
+    ordering = ['-created_at']
+    
+    def is_valid_display(self, obj):
+        """Display if the OTP is currently valid"""
+        if obj.is_valid():
+            return format_html('<span style="color: green;">✓ Valid</span>')
+        elif obj.used:
+            return format_html('<span style="color: red;">✗ Used</span>')
+        else:
+            return format_html('<span style="color: orange;">✗ Expired</span>')
+    is_valid_display.short_description = 'Status'
+    
+    fieldsets = (
+        ('OTP Information', {
+            'fields': ('email', 'otp_code', 'signed_link')
+        }),
+        ('Status', {
+            'fields': ('used', 'used_at')
+        }),
+        ('Timing', {
+            'fields': ('created_at', 'expires_at')
+        })
+    )

@@ -8,13 +8,9 @@ urlpatterns = [
     # Health check
     path('health/', views.health_check, name='health_check'),
     
-    # OTP endpoints (original)
+    # OTP endpoints for general access (using OTPVerification model)
     path('send-otp/', views.send_otp, name='send_otp'),
-    path('verify-otp/', views.verify_otp, name='verify_otp'),
-    
-    # New dedicated OTP endpoints
-    path('generate-otp/', otp_views.generate_otp, name='generate_otp'),
-    path('verify-otp-status/', otp_views.verify_otp, name='verify_otp_status'),
+    path('verify-otp/', views.verify_otp_general, name='verify_otp'),
     
     # User registration and profile management
     path('register/', views.UserRegistrationView.as_view(), name='user_register'),
@@ -47,4 +43,9 @@ urlpatterns = [
     # Questions and Questionnaire
     path('questions/', views.get_questions_list, name='get_questions_list'),
     path('test-questionnaire/', views.test_questionnaire_answers, name='test_questionnaire_answers'),
+    
+    # Signed Links
+    path('create-signed-link/', views.create_signed_link, name='create_signed_link'),
+    path('validate-signed-link/', views.validate_signed_link, name='validate_signed_link'),
+    path('verify-access-code/', views.verify_otp, name='verify_access_code'),
 ]

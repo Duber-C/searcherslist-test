@@ -76,8 +76,8 @@ EXTRACTION_SCHEMA = {
     "current_role": "string or null",
     "company": "string or null",
     "years_experience": "string or null",
-    "education": "array of objects [{school, degree, field, years, description}, ...] or null",
-    "professional_experience": "array of objects [{company, title, duration, description, achievements}, ...] or null",
+    "education": "array of objects [{school: string, degree: string, field: string, years: string, description: string}, ...] or null - ALL fields must be strings, use 'Unknown' for missing values, never null",
+    "professional_experience": "array of objects [{company: string, title: string, duration: string, description: string, achievements: string}, ...] or null - ALL fields must be strings, use 'Unknown' for missing values, never null",
     "certifications": "summary or null",
     "achievements": "summary or null",
     "website": "string or null",
@@ -450,6 +450,14 @@ EXTRACTION RULES:
 10. NEVER leave education or professional_experience as null if LinkedIn or Resume contains this information
 11. RESPONSE FORMAT MUST BE IDENTICAL regardless of whether questionnaire data is present or not
 12. Questionnaire is supplementary data only - do not change output schema or field types based on its presence
+13. FIELD VALUE REQUIREMENTS:
+    - education.degree: Use actual degree abbreviation (BS, MS, MBA, PhD) or program name, never null
+    - education.field: Major/specialization field, use 'General' if unknown, never null  
+    - education.years: Format as 'YYYY-YYYY' or 'Graduated YYYY', never null
+    - education.description: Additional details or 'None', never null
+    - professional_experience.title: Full job title, never null
+    - professional_experience.duration: Format as 'YYYY-YYYY' or 'X years', never null
+    - ALL string fields must be actual strings, use 'Unknown' instead of null values
 
 REQUIRED OUTPUT SCHEMA (use these exact field names):
 {json.dumps(EXTRACTION_SCHEMA, indent=2)}

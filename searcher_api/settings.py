@@ -166,9 +166,10 @@ import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# File upload settings
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+# File upload settings - Increased for larger files (25MB)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024  # 25MB  
+DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024  # 25MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # Increase field limit
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'

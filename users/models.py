@@ -1,18 +1,20 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+import uuid
+import random
+import string
+import re
 
 
 class User(AbstractUser):
     """
     Extended User model with additional fields for searcher profiles
     """
-    # Phone number with validation
-    phone_regex = RegexValidator(
-        regex=r'^\+?1?\d{9,15}$', 
-        message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
-    )
-    phone_number = models.CharField(validators=[phone_regex], max_length=17, blank=True)
+    # Phone number - will be cleaned and validated in save method
+    phone_number = models.CharField(max_length=17, blank=True)
     
     # Location fields
     country = models.CharField(max_length=100, blank=True)
@@ -20,7 +22,7 @@ class User(AbstractUser):
     state = models.CharField(max_length=100, blank=True)
     
     # LinkedIn profile
-    linkedin_url = models.URLField(blank=True)
+    linkedin_url = models.URLField(blank=True, null=True)
     
     # File uploads
     resume = models.FileField(upload_to='resumes/', blank=True, null=True)
@@ -62,7 +64,7 @@ class User(AbstractUser):
     achievements = models.TextField(blank=True, help_text="Notable achievements and awards")
     
     # Additional profile fields
-    website = models.URLField(blank=True, help_text="Personal or company website")
+    website = models.URLField(blank=True, null=True, help_text="Personal or company website")
     bio = models.TextField(blank=True, help_text="Professional bio/summary")
     skills = models.TextField(blank=True, help_text="Key skills and competencies")
     languages = models.CharField(max_length=200, blank=True, help_text="Languages spoken")
@@ -94,6 +96,53 @@ class User(AbstractUser):
             return True
         return False
     
+    def clean_phone_number(self, phone):
+        """Clean and validate phone number"""
+        if not phone:
+            return ""
+        
+        # Remove all non-digit characters
+        cleaned = re.sub(r'[^\d]', '', phone)
+        
+        # Add country code if missing (assume US +1)
+        if len(cleaned) == 10:
+            cleaned = '1' + cleaned
+        elif len(cleaned) == 11 and cleaned.startswith('1'):
+            pass  # Already has country code
+        else:
+            # Invalid length, return as-is and let validation fail
+            return phone
+        
+        # Format as +1234567890
+        return '+' + cleaned
+    
+    def clean_url_field(self, url):
+        """Clean and validate URL fields"""
+        if not url:
+            return ""
+        
+        # Add https:// if missing
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        return url
+    
+    def save(self, *args, **kwargs):
+        """Clean fields before saving"""
+        # Clean phone number
+        if self.phone_number:
+            self.phone_number = self.clean_phone_number(self.phone_number)
+        
+        # Clean LinkedIn URL
+        if self.linkedin_url:
+            self.linkedin_url = self.clean_url_field(self.linkedin_url)
+        
+        # Clean website URL
+        if self.website:
+            self.website = self.clean_url_field(self.website)
+        
+        super().save(*args, **kwargs)
+
     class Meta:
         db_table = 'users_user'
         verbose_name = 'User'
@@ -334,3 +383,85 @@ class Question(models.Model):
         
     def __str__(self):
         return f"{self.order}. {self.text[:50]}{'...' if len(self.text) > 50 else ''}"
+
+
+import uuid
+from datetime import timedelta
+from django.utils import timezone
+
+class Signed_links(models.Model):
+    """
+    Model for secure signed URLs that provide access to the frontend
+    """
+    email = models.EmailField()
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(blank=True, null=True)
+    
+    class Meta:
+        verbose_name = "Signed Link"
+        verbose_name_plural = "Signed Links"
+        ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            # Set expiry to 24 hours from creation
+            self.expires_at = timezone.now() + timedelta(hours=24)
+        super().save(*args, **kwargs)
+    
+    def is_valid(self):
+        """Check if the link is still valid (not expired and not used)"""
+        return not self.used and timezone.now() < self.expires_at
+    
+    def mark_as_used(self):
+        """Mark the link as used"""
+        self.used = True
+        self.used_at = timezone.now()
+        self.save()
+    
+    def __str__(self):
+        status = "Used" if self.used else ("Expired" if timezone.now() > self.expires_at else "Valid")
+        return f"{self.email} - {status} - {self.token}"
+
+
+class OTPVerification(models.Model):
+    """
+    Model for storing OTP codes for email verification
+    """
+    email = models.EmailField()
+    otp_code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(blank=True, null=True)
+    signed_link = models.ForeignKey(Signed_links, on_delete=models.CASCADE, related_name='otp_verifications', null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "OTP Verification"
+        verbose_name_plural = "OTP Verifications"
+        ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        if not self.otp_code:
+            # Generate 6-digit OTP
+            self.otp_code = ''.join(random.choices(string.digits, k=6))
+        if not self.expires_at:
+            # Set expiry to 10 minutes from creation
+            self.expires_at = timezone.now() + timezone.timedelta(minutes=10)
+        super().save(*args, **kwargs)
+    
+    def is_valid(self):
+        """Check if the OTP is still valid (not expired and not used)"""
+        return not self.used and timezone.now() < self.expires_at
+    
+    def mark_as_used(self):
+        """Mark the OTP as used"""
+        self.used = True
+        self.used_at = timezone.now()
+        self.save()
+    
+    def __str__(self):
+        status = "Used" if self.used else ("Expired" if timezone.now() > self.expires_at else "Valid")
+        return f"{self.email} - {self.otp_code} - {status}"

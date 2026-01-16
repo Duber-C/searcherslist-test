@@ -4,6 +4,61 @@ from django.contrib.auth.password_validation import validate_password
 from .otp_models import OTP
 import re
 
+
+class NullableURLField(serializers.CharField):
+    """Custom URL field that allows None/empty values and validates URLs when provided"""
+    def to_internal_value(self, data):
+        if data is None or data == '':
+            return ''
+        
+        # Convert to string and strip
+        value = str(data).strip()
+        if not value:
+            return ''
+            
+        return value
+    
+    def validate(self, value):
+        if not value:
+            return ''
+        
+        # Add protocol if missing and it looks like a valid domain
+        if not value.startswith(('http://', 'https://')):
+            if '.' in value:
+                value = f'https://{value}'
+        
+        # Basic URL validation - check if it looks like a URL
+        import re
+        url_pattern = re.compile(
+            r'^https?://'  # http:// or https://
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
+            r'localhost|'  # localhost...
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+            r'(?::\d+)?'  # optional port
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+        
+        if not url_pattern.match(value):
+            raise serializers.ValidationError("Enter a valid URL.")
+            
+        return value
+
+
+class LinkedInURLField(NullableURLField):
+    """Custom LinkedIn URL field with specific LinkedIn validation"""
+    def validate(self, value):
+        if not value:
+            return ''
+        
+        # Call parent validation first
+        value = super().validate(value)
+        
+        # Check if it's a LinkedIn URL
+        if value and 'linkedin.com' not in value.lower():
+            raise serializers.ValidationError("Please enter a valid LinkedIn profile URL.")
+            
+        return value
+
+
 User = get_user_model()
 
 
@@ -13,6 +68,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     """
     password = serializers.CharField(write_only=True, required=False)
     confirm_password = serializers.CharField(write_only=True, required=False)
+    linkedin_url = LinkedInURLField(required=False, allow_blank=True, allow_null=True)
+    website = NullableURLField(required=False, allow_blank=True, allow_null=True)
     
     class Meta:
         model = User
@@ -24,7 +81,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'value_proposition', 'areas_of_expertise', 'investment_experience',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'current_role', 'company', 'years_experience',
-            'education', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages'
+            'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages'
         ]
         extra_kwargs = {
             'email': {'required': True},
@@ -83,17 +140,39 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return value
     
     def validate_phone_number(self, value):
-        """Validate phone number format"""
-        if value and not re.match(r'^\+?1?\d{9,15}$', value):
+        """Clean and validate phone number format"""
+        if not value:
+            return value
+        
+        # Clean phone number using the same logic as the model
+        cleaned = re.sub(r'[^\d]', '', value)
+        
+        # Add country code if missing (assume US +1)
+        if len(cleaned) == 10:
+            cleaned = '1' + cleaned
+        elif len(cleaned) == 11 and cleaned.startswith('1'):
+            pass  # Already has country code
+        elif len(cleaned) < 10:
             raise serializers.ValidationError(
-                "Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
+                "Phone number must be at least 10 digits."
             )
-        return value
+        
+        # Format as +1234567890
+        return '+' + cleaned
     
     def validate_linkedin_url(self, value):
-        """Validate LinkedIn URL"""
-        if value and 'linkedin.com' not in value.lower():
+        """Clean and validate LinkedIn URL"""
+        if not value:
+            return value
+        
+        # Add https:// if missing
+        if not value.startswith(('http://', 'https://')):
+            value = 'https://' + value
+        
+        # Check if it's a LinkedIn URL
+        if 'linkedin.com' not in value.lower():
             raise serializers.ValidationError("Please enter a valid LinkedIn profile URL.")
+        
         return value
     
     def validate_background(self, value):
@@ -150,6 +229,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         """Update existing user with validated data"""
+        # Debug professional experience in validated_data
+        if 'professional_experience' in validated_data:
+            prof_exp = validated_data['professional_experience']
+            print(f"💼 SERIALIZER UPDATE - Professional experience in validated_data:")
+            print(f"   Type: {type(prof_exp)}")
+            print(f"   Length: {len(prof_exp) if isinstance(prof_exp, (list, dict)) else 'N/A'}")
+            print(f"   Content: {prof_exp}")
+        else:
+            print(f"❌ SERIALIZER UPDATE - No professional_experience in validated_data")
+        
         # Remove confirm_password from validated_data
         validated_data.pop('confirm_password', None)
         
@@ -163,12 +252,15 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             if value is not None and value != '':  # Only update non-empty values
                 setattr(instance, attr, value)
+                if attr == 'professional_experience':
+                    print(f"💾 SERIALIZER UPDATE - Set professional_experience on instance: {value}")
         
         # Set password if provided
         if password:
             instance.set_password(password)
         
         instance.save()
+        print(f"💾 SERIALIZER UPDATE - Instance saved. Final professional_experience: {getattr(instance, 'professional_experience', 'NOT FOUND')}")
         return instance
 
 
@@ -217,6 +309,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     """
     Serializer for updating user profile
     """
+    linkedin_url = LinkedInURLField(required=False, allow_blank=True, allow_null=True)
+    website = NullableURLField(required=False, allow_blank=True, allow_null=True)
+    
     class Meta:
         model = User
         fields = [
@@ -235,12 +330,6 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
             )
-        return value
-    
-    def validate_linkedin_url(self, value):
-        """Validate LinkedIn URL"""
-        if value and 'linkedin.com' not in value.lower():
-            raise serializers.ValidationError("Please enter a valid LinkedIn profile URL.")
         return value
     
     def validate_background(self, value):

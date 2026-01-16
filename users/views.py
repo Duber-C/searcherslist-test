@@ -76,6 +76,61 @@ class UserListView(generics.ListAPIView):
             return User.objects.filter(id=self.request.user.id)
 
 
+def normalize_array_fields(data):
+    """
+    Normalize education and professional_experience arrays to ensure consistent structure
+    """
+    if 'education' in data and isinstance(data['education'], list):
+        normalized_education = []
+        for edu in data['education']:
+            if edu and isinstance(edu, dict):
+                normalized_edu = {
+                    'school': str(edu.get('school', 'Unknown')).strip() or 'Unknown',
+                    'degree': str(edu.get('degree', 'Unknown')).strip() or 'Unknown',
+                    'field': str(edu.get('field', 'General')).strip() or 'General',
+                    'years': str(edu.get('years', 'Unknown')).strip() or 'Unknown',
+                    'description': str(edu.get('description', 'None')).strip() or 'None'
+                }
+                # Convert null strings back to proper values
+                for key, value in normalized_edu.items():
+                    if value.lower() in ['null', 'none', '']:
+                        if key == 'degree':
+                            normalized_edu[key] = 'Unknown'
+                        elif key == 'field':
+                            normalized_edu[key] = 'General'
+                        elif key == 'description':
+                            normalized_edu[key] = 'None'
+                        else:
+                            normalized_edu[key] = 'Unknown'
+                
+                normalized_education.append(normalized_edu)
+        data['education'] = normalized_education
+
+    if 'professional_experience' in data and isinstance(data['professional_experience'], list):
+        normalized_experience = []
+        for exp in data['professional_experience']:
+            if exp and isinstance(exp, dict):
+                normalized_exp = {
+                    'company': str(exp.get('company', 'Unknown')).strip() or 'Unknown',
+                    'title': str(exp.get('title', 'Unknown')).strip() or 'Unknown', 
+                    'duration': str(exp.get('duration', 'Unknown')).strip() or 'Unknown',
+                    'description': str(exp.get('description', 'None')).strip() or 'None',
+                    'achievements': str(exp.get('achievements', 'None')).strip() or 'None'
+                }
+                # Convert null strings back to proper values
+                for key, value in normalized_exp.items():
+                    if value.lower() in ['null', 'none', '']:
+                        if key in ['description', 'achievements']:
+                            normalized_exp[key] = 'None'
+                        else:
+                            normalized_exp[key] = 'Unknown'
+                
+                normalized_experience.append(normalized_exp)
+        data['professional_experience'] = normalized_experience
+
+    return data
+
+
 def map_frontend_fields(data, updating_existing_user=False):
     """
     Map frontend camelCase fields to backend snake_case fields
@@ -111,6 +166,9 @@ def map_frontend_fields(data, updating_existing_user=False):
         if 'email' in mapped_data and 'username' not in mapped_data:
             mapped_data['username'] = mapped_data['email']
     
+    # Normalize array fields for consistent structure
+    mapped_data = normalize_array_fields(mapped_data)
+    
     return mapped_data
 
 
@@ -126,6 +184,16 @@ def create_profile(request):
     print(f"🔍 Request method: {request.method}")
     print(f"🔍 Content-Type: {request.content_type}")
     
+    # Debug professional experience specifically
+    if 'professional_experience' in request.data:
+        prof_exp = request.data['professional_experience']
+        print(f"💼 Professional experience received:")
+        print(f"   Type: {type(prof_exp)}")
+        print(f"   Length: {len(prof_exp) if isinstance(prof_exp, (list, dict)) else 'N/A'}")
+        print(f"   Content: {prof_exp}")
+    else:
+        print(f"❌ No 'professional_experience' field in request.data")
+    
     # Map frontend fields to backend fields
     email = request.data.get('email')
     user_exists = User.objects.filter(email=email).exists() if email else False
@@ -135,6 +203,16 @@ def create_profile(request):
     
     mapped_data = map_frontend_fields(request.data, updating_existing_user=user_exists)
     print(f"🗺️  Mapped data: {mapped_data}")
+    
+    # Debug professional experience after mapping
+    if 'professional_experience' in mapped_data:
+        prof_exp_mapped = mapped_data['professional_experience']
+        print(f"💼 Professional experience after mapping:")
+        print(f"   Type: {type(prof_exp_mapped)}")
+        print(f"   Length: {len(prof_exp_mapped) if isinstance(prof_exp_mapped, (list, dict)) else 'N/A'}")
+        print(f"   Content: {prof_exp_mapped}")
+    else:
+        print(f"❌ No 'professional_experience' field in mapped_data")
     
     email_verified = mapped_data.get('email_verified') == 'true'
     print(f"✅ Email verified: {email_verified}")
@@ -299,53 +377,180 @@ def health_check(request):
 @permission_classes([AllowAny])
 def send_otp(request):
     """
-    Send OTP to email address
+    Send OTP to email address - only if email exists in signed_links or users table
     """
-    serializer = SendOTPSerializer(data=request.data)
+    email = request.data.get('email')
     
-    if serializer.is_valid():
-        email = serializer.validated_data['email']
+    if not email:
+        return Response({
+            'success': False,
+            'message': 'Email is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    print(f"🔍 Checking email access: {email}")
+    
+    # Check if email exists in signed_links table (invited users)
+    has_signed_link = Signed_links.objects.filter(email=email).exists()
+    
+    # Check if email exists in users table (existing users)
+    has_user_account = User.objects.filter(email=email).exists()
+    
+    print(f"📋 Email check results:")
+    print(f"  - Has signed link: {has_signed_link}")
+    print(f"  - Has user account: {has_user_account}")
+    
+    if not has_signed_link and not has_user_account:
+        print(f"❌ Email {email} not found in either table - access denied")
+        return Response({
+            'success': False,
+            'message': 'This email has not been invited to access the application. Please contact support.',
+            'error_type': 'not_authorized'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Invalidate any existing unused OTPs for this email
+        existing_otps = OTPVerification.objects.filter(email=email, used=False)
+        if existing_otps.exists():
+            print(f"🔄 Invalidating {existing_otps.count()} existing OTPs for {email}")
+            existing_otps.update(used=True, used_at=timezone.now())
         
+        # Create new OTP using the new OTPVerification model
+        otp_verification = OTPVerification.objects.create(
+            email=email,
+            signed_link=None  # Can be null for existing users
+        )
+        
+        print(f"✅ Created new OTP for {email}: {otp_verification.otp_code}")
+        
+        # Send OTP email
         try:
-            # Create new OTP
-            otp = OTP.create_otp(email)
-            
-            # Send email
-            email_sent, email_message = EmailService.send_otp_email(
-                email=email, 
-                otp_code=otp.otp_code, 
-                user_exists=otp.user_exists
+            send_mail(
+                subject='Your Access Code - Searcher Platform',
+                message=f'Your access code is: {otp_verification.otp_code}\\n\\nThis code will expire in 10 minutes.',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                html_message=f'''
+                <html>
+                <body>
+                    <h2>Your Access Code</h2>
+                    <p>Your access code for the Searcher Platform is:</p>
+                    <h1 style="color: #007bff; font-size: 36px; text-align: center; margin: 20px 0;">{otp_verification.otp_code}</h1>
+                    <p>This code will expire in 10 minutes.</p>
+                    <p>If you didn't request this code, please ignore this email.</p>
+                </body>
+                </html>
+                ''',
+                fail_silently=False,
             )
-            
-            if email_sent:
-                return Response({
-                    'success': True,
-                    'message': 'OTP sent successfully!',
-                    'email': email,
-                    'user_exists': otp.user_exists,
-                    'expires_in_minutes': 10
-                }, status=status.HTTP_200_OK)
-            else:
-                # Delete the OTP if email failed to send
-                otp.delete()
-                return Response({
-                    'success': False,
-                    'message': 'Failed to send OTP email. Please try again.',
-                    'error': email_message
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                
+            print(f"📧 OTP sent to {email}: {otp_verification.otp_code}")
         except Exception as e:
+            print(f"❌ Failed to send OTP email: {e}")
+            otp_verification.delete()
             return Response({
                 'success': False,
-                'message': 'Error generating OTP. Please try again.',
-                'error': str(e)
+                'message': 'Failed to send access code. Please try again.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    return Response({
-        'success': False,
-        'message': 'Invalid email address.',
-        'errors': serializer.errors
-    }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'success': True,
+            'message': 'Access code sent to your email',
+            'email': email,
+            'user_exists': has_user_account
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"💥 Error creating OTP: {e}")
+        return Response({
+            'success': False,
+            'message': 'Error generating access code. Please try again.',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_otp_general(request):
+    """
+    Verify OTP code for general access (from homepage)
+    """
+    try:
+        email = request.data.get('email')
+        otp_code = request.data.get('otp_code')
+        
+        print(f"🔍 BACKEND DEBUG - Verifying general OTP:")
+        print(f"Email: {email}")
+        print(f"OTP Code: {otp_code}")
+        
+        if not email or not otp_code:
+            print("❌ Missing email or OTP code")
+            return Response({
+                'success': False,
+                'message': 'Email and OTP code are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get the most recent valid OTP for this email
+            otp_verification = OTPVerification.objects.filter(
+                email=email,
+                otp_code=otp_code,
+                used=False
+            ).order_by('-created_at').first()
+            
+            if not otp_verification:
+                print("❌ OTP not found or already used")
+                return Response({
+                    'success': False,
+                    'message': 'Invalid or expired access code'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+        except Exception as e:
+            print(f"❌ Database error: {e}")
+            return Response({
+                'success': False,
+                'message': 'Invalid access code'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        if not otp_verification.is_valid():
+            reason = "already used" if otp_verification.used else "expired"
+            print(f"❌ OTP is {reason}")
+            return Response({
+                'success': False,
+                'message': f'Access code is {reason}. Please request a new one.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mark OTP as used
+        otp_verification.mark_as_used()
+        
+        print(f"✅ OTP verified successfully for {email}")
+        
+        # Determine user status
+        try:
+            user = User.objects.get(email=email)
+            if user.profile_completed:
+                account_status = 'finished'
+                next_action = 'dashboard'
+            else:
+                account_status = 'incomplete'
+                next_action = 'complete_profile'
+        except User.DoesNotExist:
+            account_status = 'new'
+            next_action = 'create_profile'
+        
+        return Response({
+            'success': True,
+            'message': 'OTP verified successfully!',
+            'email': email,
+            'account_status': account_status,
+            'next_action': next_action,
+            'user_exists': account_status != 'new'
+        })
+        
+    except Exception as e:
+        print(f"💥 BACKEND ERROR: {str(e)}")
+        return Response({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -474,56 +679,50 @@ def update_basic_info(request):
         user = User.objects.get(email=email)
         print(f"DEBUG: Found user: {user.email} (ID: {user.id})")
         
-        # Update basic info fields
-        print("DEBUG: Starting field updates...")
+        # Prepare data for serializer
+        update_data = {}
         
         if 'firstName' in request.data and request.data['firstName']:
             print(f"DEBUG: Updating firstName: '{request.data['firstName']}'")
-            user.first_name = request.data['firstName']
+            update_data['first_name'] = request.data['firstName']
             
         if 'lastName' in request.data and request.data['lastName']:
             print(f"DEBUG: Updating lastName: '{request.data['lastName']}'")
-            user.last_name = request.data['lastName']
+            update_data['last_name'] = request.data['lastName']
             
         if 'phoneNumber' in request.data and request.data['phoneNumber']:
             print(f"DEBUG: Updating phoneNumber: '{request.data['phoneNumber']}'")
-            user.phone_number = request.data['phoneNumber']
+            update_data['phone_number'] = request.data['phoneNumber']
             
         if 'linkedinUrl' in request.data:
-            linkedin_url = request.data['linkedinUrl'].strip()
+            linkedin_url = request.data['linkedinUrl'].strip() if request.data['linkedinUrl'] else ''
             print(f"DEBUG: Processing linkedinUrl: '{linkedin_url}'")
-            if linkedin_url == '':
-                user.linkedin_url = ''
-            elif linkedin_url.startswith('http'):
-                user.linkedin_url = linkedin_url
-            elif linkedin_url:
-                # Add https:// prefix if missing
-                user.linkedin_url = f'https://{linkedin_url}'
+            update_data['linkedin_url'] = linkedin_url
                 
         if 'website' in request.data:
-            # Allow empty website or validate URL format
-            website = request.data['website'].strip()
+            website = request.data['website'].strip() if request.data['website'] else ''
             print(f"DEBUG: Processing website: '{website}'")
-            if website == '':
-                user.website = ''
-            elif website.startswith('http'):
-                user.website = website
-            elif website and '.' in website:
-                # Add http:// prefix if missing and it looks like a domain
-                user.website = f'http://{website}'
-                print(f"DEBUG: Fixed website URL to: '{user.website}'")
-            elif website:
-                # Invalid website format - skip updating this field
-                print(f"DEBUG: Invalid website format: '{website}' - skipping update")
-                pass
+            update_data['website'] = website
                 
         if 'languages' in request.data:
             print(f"DEBUG: Updating languages: '{request.data['languages']}'")
-            user.languages = request.data['languages']
+            update_data['languages'] = request.data['languages']
             
-        print("DEBUG: About to save user...")
-        user.save()
-        print("DEBUG: User saved successfully!")
+        print(f"DEBUG: About to validate with serializer using data: {update_data}")
+        
+        # Use serializer for validation and saving
+        serializer = UserUpdateSerializer(user, data=update_data, partial=True)
+        if serializer.is_valid():
+            print("DEBUG: Serializer is valid, saving user...")
+            serializer.save()
+            print("DEBUG: User saved successfully!")
+        else:
+            print(f"DEBUG: Serializer validation errors: {serializer.errors}")
+            return Response({
+                'message': 'Validation failed',
+                'errors': serializer.errors,
+                'status': 'error'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({
             'message': 'Basic information updated successfully!',
@@ -2224,6 +2423,270 @@ def test_questionnaire_answers(request):
         return Response({
             'status': 'error',
             'message': f'Failed to process questionnaire answers: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Signed Links Views
+from .models import Signed_links, OTPVerification
+from django.core.mail import send_mail
+from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
+
+@api_view(['POST'])
+@permission_classes([AllowAny])  # You might want to restrict this to admin users later
+def create_signed_link(request):
+    """
+    Create a signed link and send invitation email
+    """
+    try:
+        email = request.data.get('email')
+        if not email:
+            return Response({
+                'status': 'error',
+                'message': 'Email is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if there's already a valid link for this email
+        existing_link = Signed_links.objects.filter(
+            email=email,
+            used=False,
+            expires_at__gt=timezone.now()
+        ).first()
+        
+        if existing_link:
+            token = existing_link.token
+        else:
+            # Create new signed link
+            signed_link = Signed_links.objects.create(email=email)
+            token = signed_link.token
+        
+        # Create the invitation URL
+        frontend_url = request.data.get('frontend_url', 'http://localhost:3000')
+        invitation_url = f"{frontend_url}/profile-upload?token={token}&email={email}"
+        
+        # Send invitation email
+        try:
+            send_mail(
+                subject='You have been invited to SearcherList',
+                message=f'''
+You have been invited to join SearcherList!
+
+Please click the link below to access your profile creation page:
+{invitation_url}
+
+This link will expire in 24 hours.
+
+Best regards,
+The SearcherList Team
+                ''',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            
+            return Response({
+                'status': 'success',
+                'message': 'Invitation sent successfully',
+                'token': str(token),
+                'invitation_url': invitation_url
+            })
+            
+        except Exception as email_error:
+            return Response({
+                'status': 'warning',
+                'message': 'Link created but email could not be sent',
+                'token': str(token),
+                'invitation_url': invitation_url,
+                'email_error': str(email_error)
+            })
+            
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Failed to create signed link: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def validate_signed_link(request):
+    """
+    Validate a signed link token and send OTP to email
+    """
+    try:
+        token = request.data.get('token')
+        email = request.data.get('email')
+        
+        print(f"🔍 BACKEND DEBUG - Validating signed link:")
+        print(f"Token: {token}")
+        print(f"Email: {email}")
+        
+        if not token or not email:
+            print("❌ Missing token or email")
+            return Response({
+                'status': 'error',
+                'message': 'Token and email are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # STRICT CHECK: Token AND email must match exactly
+            signed_link = Signed_links.objects.get(token=token, email=email)
+            print(f"✅ Found signed link: {signed_link}")
+            print(f"Used: {signed_link.used}, Expires: {signed_link.expires_at}")
+            
+            # Additional security: Check if this exact combination exists
+            if signed_link.email != email or str(signed_link.token) != token:
+                print("❌ Token/email mismatch detected")
+                return Response({
+                    'status': 'error',
+                    'message': 'This email has not been invited to access the application. Please contact support.',
+                    'error_type': 'not_invited'
+                }, status=status.HTTP_404_NOT_FOUND)
+                
+        except Signed_links.DoesNotExist:
+            print("❌ Signed link not found - email not invited")
+            return Response({
+                'status': 'error',
+                'message': 'This email has not been invited to access the application. Please contact support.',
+                'error_type': 'not_invited'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        if not signed_link.is_valid():
+            reason = "already used" if signed_link.used else "expired"
+            print(f"❌ Link is {reason}")
+            return Response({
+                'status': 'error',
+                'message': f'Invitation link is {reason}. Please contact support for a new invitation.',
+                'error_type': 'expired_or_used'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create and send OTP
+        otp_verification = OTPVerification.objects.create(
+            email=email,
+            signed_link=signed_link
+        )
+        
+        # Send OTP email
+        try:
+            send_mail(
+                subject='Your Access Code - Searcher Platform',
+                message=f'Your access code is: {otp_verification.otp_code}\n\nThis code will expire in 10 minutes.',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                html_message=f'''
+                <html>
+                <body>
+                    <h2>Your Access Code</h2>
+                    <p>Your access code for the Searcher Platform is:</p>
+                    <h1 style="color: #007bff; font-size: 36px; text-align: center; margin: 20px 0;">{otp_verification.otp_code}</h1>
+                    <p>This code will expire in 10 minutes.</p>
+                    <p>If you didn't request this code, please ignore this email.</p>
+                </body>
+                </html>
+                ''',
+                fail_silently=False,
+            )
+            print(f"📧 OTP sent to {email}: {otp_verification.otp_code}")
+        except Exception as e:
+            print(f"❌ Failed to send OTP email: {e}")
+            return Response({
+                'status': 'error',
+                'message': 'Failed to send access code. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'status': 'success',
+            'message': 'Access code sent to your email',
+            'email': email,
+            'requires_otp': True
+        })
+        
+    except Exception as e:
+        print(f"💥 BACKEND ERROR: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Failed to validate link: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_otp(request):
+    """
+    Verify OTP code and grant access
+    """
+    try:
+        email = request.data.get('email')
+        otp_code = request.data.get('otp_code')
+        
+        print(f"🔍 BACKEND DEBUG - Verifying OTP:")
+        print(f"Email: {email}")
+        print(f"OTP Code: {otp_code}")
+        
+        if not email or not otp_code:
+            print("❌ Missing email or OTP code")
+            return Response({
+                'status': 'error',
+                'message': 'Email and OTP code are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get the most recent valid OTP for this email
+            otp_verification = OTPVerification.objects.filter(
+                email=email,
+                otp_code=otp_code,
+                used=False
+            ).order_by('-created_at').first()
+            
+            if not otp_verification:
+                print("❌ OTP not found or already used")
+                return Response({
+                    'status': 'error',
+                    'message': 'Invalid or expired access code'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+        except Exception as e:
+            print(f"❌ Database error: {e}")
+            return Response({
+                'status': 'error',
+                'message': 'Invalid access code'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        if not otp_verification.is_valid():
+            reason = "already used" if otp_verification.used else "expired"
+            print(f"❌ OTP is {reason}")
+            return Response({
+                'status': 'error',
+                'message': f'Access code is {reason}. Please request a new invitation.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mark OTP as used
+        otp_verification.mark_as_used()
+        
+        # Mark the signed link as used (one-time access)
+        otp_verification.signed_link.mark_as_used()
+        
+        print(f"✅ OTP verified successfully for {email}")
+        
+        return Response({
+            'status': 'success',
+            'message': 'Access granted',
+            'email': email,
+            'access_granted': True
+        })
+        
+    except Exception as e:
+        print(f"💥 BACKEND ERROR: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
