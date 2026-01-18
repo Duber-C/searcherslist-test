@@ -157,6 +157,8 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://searcherlist.com",
+    "https://www.searcherlist.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -166,10 +168,23 @@ import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# File upload settings - Increased for larger files (25MB)
-FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024  # 25MB  
-DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024  # 25MB
+# File upload settings - Increased for larger files (50MB)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB  
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # Increase field limit
+
+# Additional file upload settings
+FILE_UPLOAD_PERMISSIONS = 0o644
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
+
+# NOTE: For production deployment, also configure reverse proxy (nginx/apache):
+# nginx: client_max_body_size 50M;
+# apache: LimitRequestBody 52428800
+
+# Maximum request size (for nginx/proxy compatibility)  
+# This should match your nginx client_max_body_size
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'

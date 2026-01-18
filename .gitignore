@@ -34,7 +34,56 @@ Thumbs.db
 htmlcov/
 .pytest_cache/
 
+# Django migrations (optional - uncomment if you don't want to track them)
+# */migrations/*.py
+# !*/migrations/__init__.py
+
+# Django static files
+staticfiles/
+static/
+collectedstatic/
+
+# Django debug toolbar
+debug_toolbar/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# Poetry
+poetry.lock
+
 # Other
 *.pid
 *.seed
 *.pid.lock
+
+# Local development
+.local
+.cache/
+
+# Security
+secrets.json
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Temporary files
+*~
+.tmp
