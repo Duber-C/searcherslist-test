@@ -758,7 +758,7 @@ class SignedLinksAdmin(admin.ModelAdmin):
     
     def send_invitation_email(self, signed_link):
         """Send invitation email with signed link"""
-        frontend_url = "http://localhost:3000"  # You can make this configurable
+        frontend_url = "https://www.searcherlist.com/"  # You can make this configurable
         # The signed link goes to profile-upload for validation, then redirects to the initial flow
         invitation_link = f"{frontend_url}/profile-upload?token={signed_link.token}&email={signed_link.email}"
         
