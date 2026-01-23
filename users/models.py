@@ -70,7 +70,7 @@ class User(AbstractUser):
     languages = models.CharField(max_length=200, blank=True, help_text="Languages spoken")
     
     # Profile completion status
-    profile_completed = models.BooleanField(default=False)
+    profile_completed = models.BooleanField(default=True)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

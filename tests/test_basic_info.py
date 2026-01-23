@@ -17,7 +17,7 @@ test_data = {
 }
 
 # API endpoint
-url = 'https://api.searcherlist.com/api/update-basic-info/'
+url = 'https:/http://localhost:8000/api/update-basic-info/'
 
 print("Testing basic-info endpoint with data:")
 print(json.dumps(test_data, indent=2))
@@ -46,6 +46,6 @@ try:
         
 except requests.exceptions.ConnectionError:
     print("❌ CONNECTION ERROR: Could not connect to the server.")
-    print("Make sure Django server is running on https://api.searcherlist.com")
+    print("Make sure Django server is running on https:/http://localhost:8000")
 except Exception as e:
     print(f"❌ UNEXPECTED ERROR: {str(e)}")

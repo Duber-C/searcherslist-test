@@ -1,3 +1,4 @@
+
 from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -18,6 +19,33 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'ai_profile_creati
 User = get_user_model()
 
 
+# Public profile view by email (for preview/public-profile page)
+@api_view(['GET'])
+def public_profile_view(request, email):
+    """
+    Get public profile data by email (for preview/public-profile page)
+    """
+    try:
+        print(f"🔍 Fetching public profile for email: {email}")
+        user = User.objects.get(email=email)
+        # You can filter which fields to expose publicly here
+        public_data = {
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'bio': user.bio,
+            'background': user.background,
+            'linkedin_url': user.linkedin_url,
+            'education': user.education,
+            'professional_experience': user.professional_experience,
+            'skills': user.skills,
+            'company': user.company,
+            'current_role': user.current_role,
+            'profile_completed': user.profile_completed,
+        }
+        return Response({'success': True, 'data': public_data})
+    except User.DoesNotExist:
+        return Response({'success': False, 'message': 'User not found'}, status=404)
+    
 class UserRegistrationView(generics.CreateAPIView):
     """
     API endpoint for user registration
@@ -2688,18 +2716,4 @@ def verify_otp(request):
             'status': 'error',
             'message': f'Server error: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

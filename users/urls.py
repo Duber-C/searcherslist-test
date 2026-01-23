@@ -48,4 +48,6 @@ urlpatterns = [
     path('create-signed-link/', views.create_signed_link, name='create_signed_link'),
     path('validate-signed-link/', views.validate_signed_link, name='validate_signed_link'),
     path('verify-access-code/', views.verify_otp, name='verify_access_code'),
+    path('public-profile/<str:email>/', views.public_profile_view, name='public_profile_view'),
+
 ]

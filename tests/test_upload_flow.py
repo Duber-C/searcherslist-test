@@ -6,7 +6,7 @@ import os
 def test_multi_source_extraction():
     """Test the new multi-source extraction endpoint"""
     
-    url = "https://api.searcherlist.com/api/multi-source-extraction/"
+    url = "https:/http://localhost:8000/api/multi-source-extraction/"
     
     # Test with LinkedIn URL only
     print("🧪 Testing multi-source extraction with LinkedIn URL only...")

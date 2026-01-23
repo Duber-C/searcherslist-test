@@ -3,7 +3,7 @@ import os
 
 # Test the multi-source extraction endpoint with a buyer profile file
 def test_multi_source_extraction():
-    url = 'https://api.searcherlist.com/api/multi-source-extraction/'
+    url = 'https:/http://localhost:8000/api/multi-source-extraction/'
     
     # Use the same file that caused the error
     file_path = '/Users/lbz/Documents/ShareHolder/searcherlist/searcher-backend/Rob Brubaker and Sheridan Richey PAIR - FINAL Buyer Profile - Cohort 53.docx'

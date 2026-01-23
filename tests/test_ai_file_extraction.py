@@ -7,7 +7,7 @@ import json
 import os
 
 # API endpoint
-url = 'https://api.searcherlist.com/api/ai-profile-extraction/'
+url = 'https:/http://localhost:8000/api/ai-profile-extraction/'
 
 print("Testing AI profile extraction endpoint with file upload...")
 print(f"URL: {url}")

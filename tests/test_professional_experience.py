@@ -20,8 +20,8 @@ test_data = {
 
 # Test both the individual endpoint and the generic section endpoint
 endpoints = [
-    ('Individual Endpoint', 'https://api.searcherlist.com/api/update-professional-experience/'),
-    ('Section Endpoint', 'https://api.searcherlist.com/api/update-profile/professional-experience/')
+    ('Individual Endpoint', 'https:/http://localhost:8000/api/update-professional-experience/'),
+    ('Section Endpoint', 'https:/http://localhost:8000/api/update-profile/professional-experience/')
 ]
 
 for endpoint_name, url in endpoints:
@@ -50,7 +50,7 @@ for endpoint_name, url in endpoints:
             
     except requests.exceptions.ConnectionError:
         print("❌ CONNECTION ERROR: Could not connect to the server.")
-        print("Make sure Django server is running on https://api.searcherlist.com")
+        print("Make sure Django server is running on https:/http://localhost:8000")
     except Exception as e:
         print(f"❌ UNEXPECTED ERROR: {str(e)}")
 

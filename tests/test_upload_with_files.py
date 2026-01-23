@@ -6,7 +6,7 @@ import os
 def test_multi_source_with_files():
     """Test multi-source extraction with actual files"""
     
-    url = "https://api.searcherlist.com/api/multi-source-extraction/"
+    url = "https:/http://localhost:8000/api/multi-source-extraction/"
     
     # Look for test files
     test_files_dir = "/Users/lbz/Documents/ShareHolder/searcherlist/searcher-backend"
