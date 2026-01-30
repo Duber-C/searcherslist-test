@@ -1,9 +1,11 @@
 
 from rest_framework import status, generics, permissions
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from .serializers import (
     UserRegistrationSerializer, UserSerializer, UserUpdateSerializer,
     SendOTPSerializer, VerifyOTPSerializer, OTPSerializer
@@ -274,9 +276,26 @@ def create_profile(request):
             user = serializer.save()
             print(f"💾 User saved successfully: {user.email} (ID: {user.id})")
             
-            # Mark profile as complete if all required fields are filled
-            profile_complete = user.mark_profile_complete()
-            print(f"📋 Profile complete status: {profile_complete}")
+            # If the frontend explicitly requested marking the profile completed, honor it.
+            # Otherwise, fall back to auto-detection via `mark_profile_complete()`.
+            profile_complete = False
+            try:
+                requested_complete = mapped_data.get('profile_completed')
+                if requested_complete is not None:
+                    if isinstance(requested_complete, str):
+                        requested_complete = requested_complete.lower() in ['true', '1', 'yes', 'on']
+                    requested_complete = bool(requested_complete)
+                if requested_complete:
+                    user.profile_completed = True
+                    user.save(update_fields=['profile_completed'])
+                    profile_complete = True
+                    print(f"📋 Profile explicitly marked complete by request for user {user.email}")
+                else:
+                    profile_complete = user.mark_profile_complete()
+                    print(f"📋 Profile complete status (auto): {profile_complete}")
+            except Exception as e:
+                print(f"❌ Error while setting profile completion: {str(e)}")
+                profile_complete = user.mark_profile_complete()
             
             return Response({
                 'message': 'Profile saved successfully!',
@@ -371,6 +390,7 @@ def get_user_profile(request):
                 'skills': user.skills,
                 'languages': user.languages,
                 'profileCompleted': user.profile_completed,
+                'published': user.published,
                 'createdAt': user.created_at.isoformat(),
                 'updatedAt': user.updated_at.isoformat(),
                 # File URLs if they exist
@@ -386,6 +406,77 @@ def get_user_profile(request):
             'profile_completed': False,
             'data': {}
         }, status=status.HTTP_200_OK)
+
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def publish_profile(request):
+    """
+    Publish the authenticated user's profile. Marks `published=True`.
+    If the profile is not marked completed, mark it completed as well.
+    """
+    try:
+        user = request.user
+        if not user:
+            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Set published flag
+        user.published = True
+
+        # If profile wasn't completed, mark it completed now
+        if not user.profile_completed:
+            user.profile_completed = True
+            user.save(update_fields=['published', 'profile_completed'])
+        else:
+            user.save(update_fields=['published'])
+
+        return Response({
+            'success': True,
+            'message': 'Profile published successfully',
+            'published': user.published,
+            'profile_completed': user.profile_completed
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"❌ Error publishing profile: {e}")
+        return Response({'success': False, 'message': 'Error publishing profile', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def publish_profile_dev(request):
+    """
+    Development-only publish endpoint: publish profile by email without authentication.
+    Only available when `settings.DEBUG` is True.
+    """
+    try:
+        if not getattr(settings, 'DEBUG', False):
+            return Response({'success': False, 'message': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+
+        email = request.data.get('email')
+        if not email:
+            return Response({'success': False, 'message': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        user.published = True
+        if not user.profile_completed:
+            user.profile_completed = True
+            user.save(update_fields=['published', 'profile_completed'])
+        else:
+            user.save(update_fields=['published'])
+
+        return Response({'success': True, 'message': 'Profile published (dev)', 'published': user.published}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"❌ Error in publish_profile_dev: {e}")
+        return Response({'success': False, 'message': 'Error publishing profile (dev)', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
@@ -415,25 +506,20 @@ def send_otp(request):
             'message': 'Email is required'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    print(f"🔍 Checking email access: {email}")
-    
-    # Check if email exists in signed_links table (invited users)
-    has_signed_link = Signed_links.objects.filter(email=email).exists()
-    
-    # Check if email exists in users table (existing users)
-    has_user_account = User.objects.filter(email=email).exists()
-    
-    print(f"📋 Email check results:")
-    print(f"  - Has signed link: {has_signed_link}")
-    print(f"  - Has user account: {has_user_account}")
-    
-    if not has_signed_link and not has_user_account:
-        print(f"❌ Email {email} not found in either table - access denied")
+    print(f"🔍 send_otp: received request for {email}")
+
+    # If user doesn't exist, create a minimal user record with only email
+    try:
+        user, created = User.objects.get_or_create(email=email, defaults={'username': email})
+        if created:
+            print(f"🆕 Created minimal user record for {email}")
+    except Exception as e:
+        print(f"❌ Error ensuring user exists for {email}: {e}")
         return Response({
             'success': False,
-            'message': 'This email has not been invited to access the application. Please contact support.',
-            'error_type': 'not_authorized'
-        }, status=status.HTTP_403_FORBIDDEN)
+            'message': 'Server error while creating user',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     try:
         # Invalidate any existing unused OTPs for this email
@@ -473,6 +559,22 @@ def send_otp(request):
             print(f"📧 OTP sent to {email}: {otp_verification.otp_code}")
         except Exception as e:
             print(f"❌ Failed to send OTP email: {e}")
+            # In development, keep the OTP and return it in the response for debugging/testing
+            try:
+                debug_mode = bool(getattr(settings, 'DEBUG', False))
+            except Exception:
+                debug_mode = False
+
+            if debug_mode:
+                print(f"🛠 DEBUG MODE: returning OTP code in response for {email}")
+                return Response({
+                    'success': True,
+                    'message': 'Access code generated (debug mode).',
+                    'email': email,
+                    'user_exists': User.objects.filter(email=email).exists(),
+                    'otp_code': otp_verification.otp_code
+                }, status=status.HTTP_200_OK)
+
             otp_verification.delete()
             return Response({
                 'success': False,
@@ -483,7 +585,7 @@ def send_otp(request):
             'success': True,
             'message': 'Access code sent to your email',
             'email': email,
-            'user_exists': has_user_account
+            'user_exists': User.objects.filter(email=email).exists()
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
@@ -515,6 +617,7 @@ def verify_otp_general(request):
                 'success': False,
                 'message': 'Email and OTP code are required'
             }, status=status.HTTP_400_BAD_REQUEST)
+        # No authorization check here - users may be created at send_otp time
         
         try:
             # Get the most recent valid OTP for this email
@@ -1479,12 +1582,27 @@ def update_profile_section(request, section_name):
             updated_user = serializer.save()
             print("DEBUG: User saved successfully!")
             
-            # Force check and update profile completion status
-            profile_was_completed = updated_user.profile_completed
-            force_profile_complete = updated_user.mark_profile_complete()
-            
-            if not profile_was_completed and force_profile_complete:
-                print(f"DEBUG: Profile completion status updated to True for user {updated_user.email}")
+            # Only update profile completion when not an autosave (autosave should not mark complete)
+            is_autosave = False
+            autosave_val = mapped_data.get('autosave')
+            if autosave_val is not None:
+                try:
+                    if isinstance(autosave_val, str):
+                        is_autosave = autosave_val.lower() in ['true', '1', 'yes', 'on']
+                    else:
+                        is_autosave = bool(autosave_val)
+                except Exception:
+                    is_autosave = False
+
+            if not is_autosave:
+                # Force check and update profile completion status
+                profile_was_completed = updated_user.profile_completed
+                force_profile_complete = updated_user.mark_profile_complete()
+
+                if not profile_was_completed and force_profile_complete:
+                    print(f"DEBUG: Profile completion status updated to True for user {updated_user.email}")
+            else:
+                print(f"DEBUG: Autosave detected for {email}; skipping profile completion check")
             
             return Response({
                 'status': 'success',
@@ -1957,14 +2075,41 @@ def multi_source_extraction(request):
                 temp_file_path = temp_file.name
             
             try:
-                if file_extension == '.pdf':
-                    return Response({
-                        'status': 'error',
-                        'message': 'PDF processing not yet implemented. Please use DOC or DOCX files.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    buyer_profile_text = extract_text_from_docx(temp_file_path)
-                    print(f"DEBUG: Extracted buyer profile text length: {len(buyer_profile_text)} characters")
+                try:
+                    if file_extension == '.pdf':
+                        # Extract text from PDF using PyPDF2
+                        try:
+                            import PyPDF2
+                            with open(temp_file_path, 'rb') as f:
+                                reader = PyPDF2.PdfReader(f)
+                                pages_text = []
+                                for pg in reader.pages:
+                                    try:
+                                        pages_text.append(pg.extract_text() or '')
+                                    except Exception:
+                                        pages_text.append('')
+                                buyer_profile_text = '\n'.join(pages_text).strip()
+                            if not buyer_profile_text:
+                                print('DEBUG: PDF extracted no text for buyer_profile')
+                                return Response({
+                                    'status': 'error',
+                                    'message': 'Failed to extract text from PDF. Please try DOC/DOCX or a different PDF.'
+                                }, status=status.HTTP_400_BAD_REQUEST)
+                            print(f"DEBUG: Extracted buyer profile text length: {len(buyer_profile_text)} characters (from PDF)")
+                        except Exception as e:
+                            print(f"❌ Error extracting PDF buyer_profile: {e}")
+                            return Response({
+                                'status': 'error',
+                                'message': 'Failed to process PDF buyer profile.'
+                            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    else:
+                        buyer_profile_text = extract_text_from_docx(temp_file_path)
+                        print(f"DEBUG: Extracted buyer profile text length: {len(buyer_profile_text)} characters")
+                finally:
+                    try:
+                        os.unlink(temp_file_path)
+                    except Exception:
+                        pass
             finally:
                 os.unlink(temp_file_path)
         
@@ -1986,17 +2131,40 @@ def multi_source_extraction(request):
                     temp_file.write(chunk)
                 temp_file_path = temp_file.name
             
-            try:
-                if file_extension == '.pdf':
-                    return Response({
-                        'status': 'error',
-                        'message': 'PDF processing not yet implemented. Please use DOC or DOCX files.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    resume_text = extract_text_from_docx(temp_file_path)
-                    print(f"DEBUG: Extracted resume text length: {len(resume_text)} characters")
-            finally:
-                os.unlink(temp_file_path)
+                try:
+                    if file_extension == '.pdf':
+                        try:
+                            import PyPDF2
+                            with open(temp_file_path, 'rb') as f:
+                                reader = PyPDF2.PdfReader(f)
+                                pages_text = []
+                                for pg in reader.pages:
+                                    try:
+                                        pages_text.append(pg.extract_text() or '')
+                                    except Exception:
+                                        pages_text.append('')
+                                resume_text = '\n'.join(pages_text).strip()
+                            if not resume_text:
+                                print('DEBUG: PDF extracted no text for resume')
+                                return Response({
+                                    'status': 'error',
+                                    'message': 'Failed to extract text from PDF resume. Please try DOC/DOCX or a different PDF.'
+                                }, status=status.HTTP_400_BAD_REQUEST)
+                            print(f"DEBUG: Extracted resume text length: {len(resume_text)} characters (from PDF)")
+                        except Exception as e:
+                            print(f"❌ Error extracting PDF resume: {e}")
+                            return Response({
+                                'status': 'error',
+                                'message': 'Failed to process PDF resume.'
+                            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    else:
+                        resume_text = extract_text_from_docx(temp_file_path)
+                        print(f"DEBUG: Extracted resume text length: {len(resume_text)} characters")
+                finally:
+                    try:
+                        os.unlink(temp_file_path)
+                    except Exception:
+                        pass
         
         # Process LinkedIn URL
         if 'linkedin_url' in request.data:
@@ -2489,8 +2657,8 @@ def create_signed_link(request):
             signed_link = Signed_links.objects.create(email=email)
             token = signed_link.token
         
-        # Create the invitation URL
-        frontend_url = request.data.get('frontend_url', 'http://localhost:3000')
+        # Create the invitation URL (default to production frontend)
+        frontend_url = request.data.get('frontend_url', 'https://www.searcherlist.com')
         invitation_url = f"{frontend_url}/profile-upload?token={token}&email={email}"
         
         # Send invitation email

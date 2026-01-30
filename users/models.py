@@ -14,12 +14,12 @@ class User(AbstractUser):
     Extended User model with additional fields for searcher profiles
     """
     # Phone number - will be cleaned and validated in save method
-    phone_number = models.CharField(max_length=17, blank=True)
+    phone_number = models.CharField(max_length=17, blank=True, null=True)
     
     # Location fields
-    country = models.CharField(max_length=100, blank=True)
-    city = models.CharField(max_length=100, blank=True)
-    state = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=100, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
     
     # LinkedIn profile
     linkedin_url = models.URLField(blank=True, null=True)
@@ -29,25 +29,25 @@ class User(AbstractUser):
     buyer_profile = models.FileField(upload_to='buyer_profiles/', blank=True, null=True)
     
     # File content storage (extracted text from uploaded documents)
-    resume_upload = models.TextField(blank=True, help_text="Content extracted from uploaded resume")
-    existing_buyer_profile = models.TextField(blank=True, help_text="Content extracted from uploaded buyer profile")
+    resume_upload = models.TextField(blank=True, null=True, help_text="Content extracted from uploaded resume")
+    existing_buyer_profile = models.TextField(blank=True, null=True, help_text="Content extracted from uploaded buyer profile")
     linkedin_data = models.JSONField(blank=True, null=True, help_text="Structured LinkedIn profile data")
     
     # Background/overview
-    background = models.TextField(blank=True)
+    background = models.TextField(blank=True, null=True)
     
     # Professional fields
-    value_proposition = models.TextField(blank=True, help_text="What unique value do you bring?")
-    areas_of_expertise = models.TextField(blank=True, help_text="Your key areas of expertise")
-    investment_experience = models.CharField(max_length=100, blank=True, help_text="Years of investment experience")
-    deal_size_preference = models.CharField(max_length=200, blank=True, help_text="Preferred deal size range")
-    industry_focus = models.TextField(blank=True, help_text="Industries you focus on")
-    geographic_focus = models.CharField(max_length=200, blank=True, help_text="Geographic regions of focus")
+    value_proposition = models.TextField(blank=True, null=True, help_text="What unique value do you bring?")
+    areas_of_expertise = models.TextField(blank=True, null=True, help_text="Your key areas of expertise")
+    investment_experience = models.CharField(max_length=100, blank=True, null=True, help_text="Years of investment experience")
+    deal_size_preference = models.CharField(max_length=200, blank=True, null=True, help_text="Preferred deal size range")
+    industry_focus = models.TextField(blank=True, null=True, help_text="Industries you focus on")
+    geographic_focus = models.CharField(max_length=200, blank=True, null=True, help_text="Geographic regions of focus")
     
     # Additional professional info
-    current_role = models.CharField(max_length=200, blank=True)
-    company = models.CharField(max_length=200, blank=True)
-    years_experience = models.CharField(max_length=50, blank=True)
+    current_role = models.CharField(max_length=200, blank=True, null=True)
+    company = models.CharField(max_length=200, blank=True, null=True)
+    years_experience = models.CharField(max_length=50, blank=True, null=True)
     
     # Education & Certification (structured as lists)
     education = models.JSONField(
@@ -60,17 +60,19 @@ class User(AbstractUser):
         blank=True,
         help_text="List of work experience: [{'company': str, 'title': str, 'duration': str, 'description': str, 'achievements': str}, ...]"
     )
-    certifications = models.TextField(blank=True, help_text="Professional certifications")
-    achievements = models.TextField(blank=True, help_text="Notable achievements and awards")
+    certifications = models.TextField(blank=True, null=True, help_text="Professional certifications")
+    achievements = models.TextField(blank=True, null=True, help_text="Notable achievements and awards")
     
     # Additional profile fields
     website = models.URLField(blank=True, null=True, help_text="Personal or company website")
-    bio = models.TextField(blank=True, help_text="Professional bio/summary")
-    skills = models.TextField(blank=True, help_text="Key skills and competencies")
-    languages = models.CharField(max_length=200, blank=True, help_text="Languages spoken")
+    bio = models.TextField(blank=True, null=True, help_text="Professional bio/summary")
+    skills = models.TextField(blank=True, null=True, help_text="Key skills and competencies")
+    languages = models.CharField(max_length=200, blank=True, null=True, help_text="Languages spoken")
     
     # Profile completion status
-    profile_completed = models.BooleanField(default=True)
+    profile_completed = models.BooleanField(default=False)
+    # Whether the user has published their public profile
+    published = models.BooleanField(default=False)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

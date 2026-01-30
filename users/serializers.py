@@ -282,7 +282,7 @@ class UserSerializer(serializers.ModelSerializer):
             'value_proposition', 'areas_of_expertise', 'investment_experience',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'current_role', 'company', 'years_experience', 'profile_completed',
-            'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages'
+            'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages', 'published'
         ]
         read_only_fields = ['id', 'username', 'created_at', 'updated_at']
     

@@ -24,13 +24,13 @@ class UserAdmin(BaseUserAdmin):
     list_display = [
         'username', 'email', 'first_name', 'last_name', 
         'phone_number', 'country', 'city', 'current_role', 'company', 
-        'profile_completed', 'is_staff', 'created_at'
+        'profile_completed', 'published', 'is_staff', 'created_at'
     ]
     
     # Fields to filter by
     list_filter = [
         'is_staff', 'is_superuser', 'is_active', 'profile_completed',
-        'country', 'state', 'created_at'
+        'published', 'country', 'state', 'created_at'
     ]
     
     # Fields to search
@@ -71,7 +71,7 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('resume', 'buyer_profile')
         }),
         ('Profile Status', {
-            'fields': ('profile_completed',)
+            'fields': ('profile_completed','published',)
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
