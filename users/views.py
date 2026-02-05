@@ -2046,341 +2046,297 @@ def multi_source_extraction(request):
         from chatGpt import extract_profile_from_multiple_sources, extract_text_from_docx
         import tempfile
         import os
-        
+        import json
+
         print("DEBUG: Starting multi-source AI profile extraction...")
-        print(f"DEBUG: Request FILES: {request.FILES.keys()}")
-        print(f"DEBUG: Request data: {request.data.keys()}")
-        
+        print(f"DEBUG: Request FILES: {list(request.FILES.keys())}")
+        print(f"DEBUG: Request data: {list(request.data.keys())}")
+
+        # -----------------------------
+        # Helpers
+        # -----------------------------
+        def save_upload_to_temp(uploaded_file, suffix: str) -> str:
+            """
+            Save an uploaded file to a temp path and return the path.
+            Uses mkstemp so the file is closed before we read it (avoids Windows locking issues too).
+            """
+            fd, path = tempfile.mkstemp(suffix=suffix)
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    for chunk in uploaded_file.chunks():
+                        f.write(chunk)
+                return path
+            except Exception:
+                try:
+                    os.unlink(path)
+                except Exception:
+                    pass
+                raise
+
+        def extract_text_from_pdf(pdf_path: str) -> str:
+            import PyPDF2
+            with open(pdf_path, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                pages_text = []
+                for pg in reader.pages:
+                    try:
+                        pages_text.append(pg.extract_text() or "")
+                    except Exception:
+                        pages_text.append("")
+            return "\n".join(pages_text).strip()
+
+        def extract_text_from_uploaded_file(uploaded_file, label: str) -> str:
+            """
+            Accepts .pdf or .docx only.
+            Rejects .doc (legacy) because python-docx cannot parse it reliably.
+            """
+            ext = os.path.splitext(uploaded_file.name)[1].lower()
+
+            if ext not in [".pdf", ".docx", ".doc"]:
+                raise ValueError(f"{label}: Unsupported file format. Please upload PDF or DOCX.")
+
+            # Reject legacy .doc unless you add conversion support
+            if ext == ".doc":
+                raise ValueError(f"{label}: Legacy .doc is not supported. Please upload .docx or .pdf instead.")
+
+            temp_path = save_upload_to_temp(uploaded_file, ext)
+            try:
+                print(f"DEBUG: {label} temp path: {temp_path}")
+                print(f"DEBUG: {label} path exists? {os.path.exists(temp_path)} size={os.path.getsize(temp_path)} bytes")
+
+                if ext == ".pdf":
+                    text = extract_text_from_pdf(temp_path)
+                    if not text:
+                        raise ValueError(f"{label}: Failed to extract text from PDF. Try a different PDF or upload DOCX.")
+                    return text
+
+                # .docx
+                text = extract_text_from_docx(temp_path)
+                if not text:
+                    raise ValueError(f"{label}: Extracted empty text from DOCX. Try a different DOCX.")
+                return text
+
+            finally:
+                # Delete exactly once
+                try:
+                    os.unlink(temp_path)
+                except FileNotFoundError:
+                    pass
+                except Exception as e:
+                    print(f"DEBUG: Failed to delete temp file {temp_path}: {e}")
+
+        # -----------------------------
         # Initialize data sources
+        # -----------------------------
         buyer_profile_text = None
         resume_text = None
         linkedin_data = None
-        
+        questionnaire_answers = None
+
+        # -----------------------------
         # Process buyer profile file
-        if 'buyer_profile' in request.FILES:
-            buyer_profile_file = request.FILES['buyer_profile']
-            print(f"DEBUG: Processing buyer profile file: {buyer_profile_file.name}")
-            
-            file_extension = os.path.splitext(buyer_profile_file.name)[1].lower()
-            if file_extension not in ['.pdf', '.doc', '.docx']:
-                return Response({
-                    'status': 'error',
-                    'message': 'Buyer profile: Unsupported file format. Please upload PDF, DOC, or DOCX files only.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Create temporary file and extract text
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
-                for chunk in buyer_profile_file.chunks():
-                    temp_file.write(chunk)
-                temp_file_path = temp_file.name
-            
+        # -----------------------------
+        if "buyer_profile" in request.FILES:
+            buyer_profile_file = request.FILES["buyer_profile"]
+            print(f"DEBUG: Processing buyer_profile file: {buyer_profile_file.name}")
             try:
-                try:
-                    if file_extension == '.pdf':
-                        # Extract text from PDF using PyPDF2
-                        try:
-                            import PyPDF2
-                            with open(temp_file_path, 'rb') as f:
-                                reader = PyPDF2.PdfReader(f)
-                                pages_text = []
-                                for pg in reader.pages:
-                                    try:
-                                        pages_text.append(pg.extract_text() or '')
-                                    except Exception:
-                                        pages_text.append('')
-                                buyer_profile_text = '\n'.join(pages_text).strip()
-                            if not buyer_profile_text:
-                                print('DEBUG: PDF extracted no text for buyer_profile')
-                                return Response({
-                                    'status': 'error',
-                                    'message': 'Failed to extract text from PDF. Please try DOC/DOCX or a different PDF.'
-                                }, status=status.HTTP_400_BAD_REQUEST)
-                            print(f"DEBUG: Extracted buyer profile text length: {len(buyer_profile_text)} characters (from PDF)")
-                        except Exception as e:
-                            print(f"❌ Error extracting PDF buyer_profile: {e}")
-                            return Response({
-                                'status': 'error',
-                                'message': 'Failed to process PDF buyer profile.'
-                            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                    else:
-                        buyer_profile_text = extract_text_from_docx(temp_file_path)
-                        print(f"DEBUG: Extracted buyer profile text length: {len(buyer_profile_text)} characters")
-                finally:
-                    try:
-                        os.unlink(temp_file_path)
-                    except Exception:
-                        pass
-            finally:
-                os.unlink(temp_file_path)
-        
+                buyer_profile_text = extract_text_from_uploaded_file(buyer_profile_file, "Buyer profile")
+                print(f"DEBUG: Extracted buyer profile text length: {len(buyer_profile_text)} characters")
+            except ValueError as ve:
+                return Response({"status": "error", "message": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                print(f"❌ Error processing buyer_profile: {e}")
+                return Response(
+                    {"status": "error", "message": "Failed to process buyer profile."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        # -----------------------------
         # Process resume file
-        if 'resume' in request.FILES:
-            resume_file = request.FILES['resume']
+        # -----------------------------
+        if "resume" in request.FILES:
+            resume_file = request.FILES["resume"]
             print(f"DEBUG: Processing resume file: {resume_file.name}")
-            
-            file_extension = os.path.splitext(resume_file.name)[1].lower()
-            if file_extension not in ['.pdf', '.doc', '.docx']:
-                return Response({
-                    'status': 'error',
-                    'message': 'Resume: Unsupported file format. Please upload PDF, DOC, or DOCX files only.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Create temporary file and extract text
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
-                for chunk in resume_file.chunks():
-                    temp_file.write(chunk)
-                temp_file_path = temp_file.name
-            
-                try:
-                    if file_extension == '.pdf':
-                        try:
-                            import PyPDF2
-                            with open(temp_file_path, 'rb') as f:
-                                reader = PyPDF2.PdfReader(f)
-                                pages_text = []
-                                for pg in reader.pages:
-                                    try:
-                                        pages_text.append(pg.extract_text() or '')
-                                    except Exception:
-                                        pages_text.append('')
-                                resume_text = '\n'.join(pages_text).strip()
-                            if not resume_text:
-                                print('DEBUG: PDF extracted no text for resume')
-                                return Response({
-                                    'status': 'error',
-                                    'message': 'Failed to extract text from PDF resume. Please try DOC/DOCX or a different PDF.'
-                                }, status=status.HTTP_400_BAD_REQUEST)
-                            print(f"DEBUG: Extracted resume text length: {len(resume_text)} characters (from PDF)")
-                        except Exception as e:
-                            print(f"❌ Error extracting PDF resume: {e}")
-                            return Response({
-                                'status': 'error',
-                                'message': 'Failed to process PDF resume.'
-                            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                    else:
-                        resume_text = extract_text_from_docx(temp_file_path)
-                        print(f"DEBUG: Extracted resume text length: {len(resume_text)} characters")
-                finally:
-                    try:
-                        os.unlink(temp_file_path)
-                    except Exception:
-                        pass
-        
+            try:
+                resume_text = extract_text_from_uploaded_file(resume_file, "Resume")
+                print(f"DEBUG: Extracted resume text length: {len(resume_text)} characters")
+            except ValueError as ve:
+                return Response({"status": "error", "message": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                print(f"❌ Error processing resume: {e}")
+                return Response(
+                    {"status": "error", "message": "Failed to process resume."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        # -----------------------------
         # Process LinkedIn URL
-        if 'linkedin_url' in request.data:
-            linkedin_url = request.data['linkedin_url'].strip()
+        # -----------------------------
+        if "linkedin_url" in request.data:
+            linkedin_url = (request.data.get("linkedin_url") or "").strip()
             if linkedin_url:
                 print(f"DEBUG: Processing LinkedIn URL: {linkedin_url}")
                 try:
-                    # Check environment variables first
-                    import os
                     from dotenv import load_dotenv
                     load_dotenv()
-                    
+
                     api_key = os.getenv("ENRICHLAYER_API_KEY")
                     api_url = os.getenv("ENRICHLAYER_PROFILE_URL")
                     print(f"🔑 ENV CHECK - API Key: {'Found' if api_key else 'Missing'}")
                     print(f"🔗 ENV CHECK - API URL: {'Found' if api_url else 'Missing'}")
-                    
+
                     if not api_key or not api_url:
-                        raise Exception(f"Missing environment variables - API_KEY: {bool(api_key)}, API_URL: {bool(api_url)}")
-                    
+                        raise Exception(
+                            f"Missing environment variables - API_KEY: {bool(api_key)}, API_URL: {bool(api_url)}"
+                        )
+
                     from linkedIn_extraction import run_linkedin_extraction
-                    print(f"🚀 ATTEMPTING LinkedIn extraction...")
+                    print("🚀 ATTEMPTING LinkedIn extraction...")
                     linkedin_data = run_linkedin_extraction(linkedin_url)
-                    
+
                     print("🔍 LINKEDIN SCRAPER RESPONSE:")
                     print("=" * 50)
-                    import json
                     print(json.dumps(linkedin_data, indent=2, ensure_ascii=False))
                     print("=" * 50)
-                    
-                    populated_fields = [k for k, v in linkedin_data.items() if v is not None and v != '' and v != []]
-                    print(f"✅ LinkedIn extraction successful - found {len(populated_fields)} populated fields: {populated_fields}")
-                    
-                    # Verify we have the key fields
-                    if len(populated_fields) < 5:
-                        print(f"⚠️ WARNING: LinkedIn extraction returned minimal data ({len(populated_fields)} fields)")
-                        if 'professional_experience' not in linkedin_data or not linkedin_data['professional_experience']:
-                            print(f"❌ MISSING: professional_experience field")
-                        if 'education' not in linkedin_data or not linkedin_data['education']:
-                            print(f"❌ MISSING: education field")
-                    
+
+                    populated_fields = [
+                        k for k, v in (linkedin_data or {}).items()
+                        if v is not None and v != "" and v != []
+                    ]
+                    print(f"✅ LinkedIn extraction successful - {len(populated_fields)} populated fields: {populated_fields}")
+
                 except Exception as e:
                     print(f"❌ LinkedIn extraction failed: {str(e)}")
                     import traceback
-                    print(f"📋 Full traceback:")
+                    print("📋 Full traceback:")
                     print(traceback.format_exc())
                     print("🔄 Falling back to basic URL data")
-                    # Fallback to basic URL data
-                    linkedin_data = {
-                        'linkedin_url': linkedin_url,
-                        'source': 'manual_url_fallback'
-                    }
-        
-        # Validate that at least one source is provided
-        available_sources = []
-        if buyer_profile_text and len(buyer_profile_text) > 100:
-            available_sources.append('buyer_profile')
-        if resume_text and len(resume_text) > 100:
-            available_sources.append('resume')
-        if linkedin_data:
-            available_sources.append('linkedin')
-        
-        if not available_sources:
-            return Response({
-                'status': 'error',
-                'message': 'No valid data sources provided. Please upload at least one document or provide LinkedIn information.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        print(f"DEBUG: Processing {len(available_sources)} data sources: {available_sources}")
-        
-        # Check for questionnaire answers
-        questionnaire_answers = None
-        if 'questionnaire_answers' in request.data:
-            import json
+                    linkedin_data = {"linkedin_url": linkedin_url, "source": "manual_url_fallback"}
+
+        # -----------------------------
+        # Questionnaire answers
+        # -----------------------------
+        if "questionnaire_answers" in request.data:
             try:
-                questionnaire_answers = json.loads(request.data['questionnaire_answers'])
+                questionnaire_answers = json.loads(request.data["questionnaire_answers"])
                 print(f"DEBUG: Questionnaire answers received: {list(questionnaire_answers.keys())}")
-                print(f"DEBUG: Questionnaire answers content:")
-                for key, value in questionnaire_answers.items():
-                    print(f"  {key}: {value[:100] if isinstance(value, str) and len(value) > 100 else value}")
-                available_sources.append("questionnaire")
             except json.JSONDecodeError:
                 print("DEBUG: Failed to parse questionnaire answers")
-        
+
+        # -----------------------------
+        # Validate at least one source
+        # -----------------------------
+        available_sources = []
+        if buyer_profile_text and len(buyer_profile_text) > 100:
+            available_sources.append("buyer_profile")
+        if resume_text and len(resume_text) > 100:
+            available_sources.append("resume")
+        if linkedin_data:
+            available_sources.append("linkedin")
+        if questionnaire_answers:
+            available_sources.append("questionnaire")
+
+        if not available_sources:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "No valid data sources provided. Please upload at least one DOCX/PDF, provide LinkedIn, or include questionnaire answers.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        print(f"DEBUG: Processing {len(available_sources)} data sources: {available_sources}")
+
+        # -----------------------------
         # Log what's being sent to AI
+        # -----------------------------
         print("🚀 SENDING TO AI EXTRACTION:")
         print("=" * 50)
         print(f"Buyer profile text length: {len(buyer_profile_text) if buyer_profile_text else 0}")
         print(f"Resume text length: {len(resume_text) if resume_text else 0}")
         print(f"LinkedIn data keys: {list(linkedin_data.keys()) if linkedin_data else 'None'}")
-        if linkedin_data:
-            linkedin_populated = [k for k, v in linkedin_data.items() if v is not None and v != '' and v != []]
-            print(f"LinkedIn populated fields: {linkedin_populated}")
         if questionnaire_answers:
-            print(f"Questionnaire answers: {list(questionnaire_answers.keys())}")
+            print(f"Questionnaire answers keys: {list(questionnaire_answers.keys())}")
         print("=" * 50)
-        
-        # Extract profile using multi-source AI extraction
+
+        # -----------------------------
+        # AI extraction
+        # -----------------------------
         extracted_data = extract_profile_from_multiple_sources(
             buyer_profile_text=buyer_profile_text,
             resume_text=resume_text,
             linkedin_data=linkedin_data,
-            questionnaire_answers=questionnaire_answers,  # Add questionnaire support
-            agent_name='Profile Extraction Agent',
-            user=None,  # No user context for this flow
-            session_id=f"multi_source_upload_{hash(str(available_sources))}"
+            questionnaire_answers=questionnaire_answers,
+            agent_name="Profile Extraction Agent",
+            user=None,
+            session_id=f"multi_source_upload_{hash(str(available_sources))}",
         )
-        
-        print(f"DEBUG: Multi-source AI extraction completed successfully")
-        
-        # Log AI response
+
         print("🤖 AI EXTRACTION RESPONSE:")
         print("=" * 50)
         if isinstance(extracted_data, dict):
-            import json
             print(json.dumps(extracted_data, indent=2, ensure_ascii=False))
         else:
             print(f"Unexpected AI response type: {type(extracted_data)}")
             print(f"AI response: {extracted_data}")
         print("=" * 50)
-        
-        # Debug: Print extracted data structure
-        print("🔍 BACKEND DEBUG - Multi-Source Extracted Data:")
-        print(f"Type: {type(extracted_data)}")
+
+        # -----------------------------
+        # Normalize {"value": ..., "confidence": ...} shapes
+        # -----------------------------
         if isinstance(extracted_data, dict):
-            print(f"Keys: {list(extracted_data.keys())}")
-            print("🔧 STARTING VALUE EXTRACTION PROCESS...")
-            
-            # Check for structured fields and ensure they're properly serialized
-            if 'education' in extracted_data:
-                education = extracted_data['education']
-                print(f"education BEFORE processing: {type(education)} = {education}")
-                # Handle both formats: direct array or {"value": array, "confidence": "high"}
-                if isinstance(education, dict) and 'value' in education:
-                    extracted_data['education'] = education['value']
-                    print(f"✅ Fixed education format: extracted value = {education['value']}")
-                elif isinstance(education, str):
+            for field_name, field_data in list(extracted_data.items()):
+                if isinstance(field_data, dict) and "value" in field_data:
+                    extracted_data[field_name] = field_data["value"]
+
+            # Handle stringified JSON for specific array fields if needed
+            for key in ["education", "professional_experience"]:
+                if key in extracted_data and isinstance(extracted_data[key], str):
                     try:
-                        import json
-                        education_parsed = json.loads(education)
-                        extracted_data['education'] = education_parsed
-                        print(f"✅ Fixed education serialization: {education_parsed}")
-                    except:
-                        print(f"❌ Failed to parse education string: {education}")
-                else:
-                    print(f"ℹ️ Education already in correct format: {type(education)}")
-                        
-            if 'professional_experience' in extracted_data:
-                prof_exp = extracted_data['professional_experience']
-                print(f"professional_experience BEFORE processing: {type(prof_exp)} = {prof_exp}")
-                # Handle both formats: direct array or {"value": array, "confidence": "high"}
-                if isinstance(prof_exp, dict) and 'value' in prof_exp:
-                    extracted_data['professional_experience'] = prof_exp['value']
-                    print(f"✅ Fixed professional_experience format: extracted value = {prof_exp['value']}")
-                elif isinstance(prof_exp, str):
-                    try:
-                        import json
-                        prof_exp_parsed = json.loads(prof_exp)
-                        extracted_data['professional_experience'] = prof_exp_parsed
-                        print(f"✅ Fixed professional_experience serialization: {prof_exp_parsed}")
-                    except:
-                        print(f"❌ Failed to parse professional_experience string: {prof_exp}")
-                else:
-                    print(f"ℹ️ Professional experience already in correct format: {type(prof_exp)}")
-                        
-            # Fix all fields that might have the {"value": X, "confidence": Y} format
-            print("🔧 Processing all fields for confidence format...")
-            fields_fixed = 0
-            for field_name, field_data in extracted_data.items():
-                if isinstance(field_data, dict) and 'value' in field_data:
-                    extracted_data[field_name] = field_data['value']
-                    print(f"✅ Fixed format for {field_name}: extracted value")
-                    fields_fixed += 1
-            print(f"🔧 VALUE EXTRACTION COMPLETE: Fixed {fields_fixed} fields")
-        else:
-            print(f"❌ Cannot process extracted_data: not a dict, got {type(extracted_data)}")
-        
+                        extracted_data[key] = json.loads(extracted_data[key])
+                    except Exception:
+                        pass
+
         response_data = {
-            'status': 'success',
-            'message': f'Multi-source AI extraction completed using {len(available_sources)} sources',
-            'extracted_data': extracted_data,
-            'sources_processed': available_sources,
-            'sources_count': len(available_sources),
-            'debug_info': {
-                'questionnaire_questions_answered': len(questionnaire_answers) if questionnaire_answers else 0,
-                'linkedin_data_available': linkedin_data is not None,
-                'resume_text_length': len(resume_text) if resume_text else 0,
-                'buyer_profile_text_length': len(buyer_profile_text) if buyer_profile_text else 0
-            }
+            "status": "success",
+            "message": f"Multi-source AI extraction completed using {len(available_sources)} sources",
+            "extracted_data": extracted_data,
+            "sources_processed": available_sources,
+            "sources_count": len(available_sources),
+            "debug_info": {
+                "questionnaire_questions_answered": len(questionnaire_answers) if questionnaire_answers else 0,
+                "linkedin_data_available": linkedin_data is not None,
+                "resume_text_length": len(resume_text) if resume_text else 0,
+                "buyer_profile_text_length": len(buyer_profile_text) if buyer_profile_text else 0,
+            },
         }
-        
+
         print("🚀 BACKEND DEBUG - Multi-source response being sent to frontend:")
         print(f"Status: {response_data['status']}")
         print(f"Sources: {response_data['sources_processed']}")
         print(f"Sources count: {response_data['sources_count']}")
-        
+
         return Response(response_data, status=status.HTTP_200_OK)
-        
+
     except ImportError as e:
         print(f"DEBUG: Import error: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': f'Failed to import AI extraction modules: {str(e)}',
-            'debug_info': 'Make sure the chatGpt.py file is in the ai_profile_creation directory'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+        return Response(
+            {
+                "status": "error",
+                "message": f"Failed to import AI extraction modules: {str(e)}",
+                "debug_info": "Make sure the chatGpt.py file is in the ai_profile_creation directory",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
     except Exception as e:
         print(f"DEBUG: Error in multi-source AI profile extraction: {str(e)}")
         import traceback
         print(f"DEBUG: Full traceback: {traceback.format_exc()}")
-        return Response({
-            'status': 'error',
-            'message': f'Multi-source AI profile extraction failed: {str(e)}',
-            'error_type': type(e).__name__
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        return Response(
+            {"status": "error", "message": f"Multi-source AI profile extraction failed: {str(e)}", "error_type": type(e).__name__},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
