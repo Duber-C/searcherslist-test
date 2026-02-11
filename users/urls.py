@@ -52,6 +52,8 @@ urlpatterns = [
     path('public-profile/<str:token>/', views.public_profile_view, name='public_profile_view'),
     path('publish-profile/', views.publish_profile, name='publish_profile'),
     path('publish-profile-dev/', views.publish_profile_dev, name='publish_profile_dev'),
+    # Debug: resolve bearer token to user (development only)
+    path('debug-token/', views.debug_resolve_token, name='debug_resolve_token'),
     # Unpublish profile (remove public token)
     path('unpublish-profile/', views.unpublish_profile, name='unpublish_profile'),
 

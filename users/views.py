@@ -605,6 +605,45 @@ def health_check(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def debug_resolve_token(request):
+    """
+    Development-only endpoint to resolve a Bearer token to a User and return debug info.
+    Only available when settings.DEBUG is True.
+    """
+    try:
+        if not getattr(settings, 'DEBUG', False):
+            return Response({'success': False, 'message': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+
+        auth = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
+        if not auth or not isinstance(auth, str) or not auth.lower().startswith('bearer '):
+            return Response({'success': False, 'message': 'Authorization Bearer token required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = auth.split(None, 1)[1].strip()
+        masked = f"****{token[-6:]}" if len(token) > 6 else token
+        print(f"🔍 debug_resolve_token received masked token: {masked}")
+
+        try:
+            user = User.objects.get(api_token=token)
+            user_info = {
+                'email': user.email,
+                'id': user.id,
+                'published': user.published,
+                'profile_completed': user.profile_completed,
+                'public_token': str(user.public_token) if user.public_token else None,
+            }
+            print(f"✅ Token resolved to user: {user.email} (ID: {user.id})")
+            return Response({'success': True, 'user': user_info}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            print("❌ No user found for provided token")
+            return Response({'success': False, 'message': 'No user found for token'}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        print(f"💥 debug_resolve_token error: {e}")
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def send_otp(request):
     """
     Send OTP to email address - only if email exists in signed_links or users table
