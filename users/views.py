@@ -486,7 +486,7 @@ def publish_profile(request):
         return Response({'success': False, 'message': 'Error publishing profile', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-#@csrf_exempt
+
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
