@@ -3,6 +3,8 @@ from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from rest_framework.authentication import SessionAuthentication
+from .authentication import ApiTokenAuthentication
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -416,9 +418,13 @@ def get_user_profile(request):
 
 @csrf_exempt
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@authentication_classes([ApiTokenAuthentication, SessionAuthentication])
+@permission_classes([IsAuthenticated])
 def publish_profile(request):
-    print(f"🚀 PUBLISH_PROFILE called for user: {request.user.email} (ID: {request.user.id})")
+    # Avoid accessing request.user attributes directly — user may be AnonymousUser
+    pu_email = getattr(getattr(request, 'user', None), 'email', 'Anonymous')
+    pu_id = getattr(getattr(request, 'user', None), 'id', 'N/A')
+    print(f"🚀 PUBLISH_PROFILE called. request.user: {pu_email} (ID: {pu_id})")
     """
     Publish the authenticated user's profile. Marks `published=True`.
     If the profile is not marked completed, mark it completed as well.
@@ -489,9 +495,13 @@ def publish_profile(request):
 
 @csrf_exempt
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@authentication_classes([ApiTokenAuthentication, SessionAuthentication])
+@permission_classes([IsAuthenticated])
 def unpublish_profile(request):
-    print(f"🚫 UNPUBLISH_PROFILE called for user: {request} (ID: {request.user.id})")
+    # Avoid accessing request.user attributes directly — user may be AnonymousUser
+    up_email = getattr(getattr(request, 'user', None), 'email', 'Anonymous')
+    up_id = getattr(getattr(request, 'user', None), 'id', 'N/A')
+    print(f"🚫 UNPUBLISH_PROFILE called. request.user: {up_email} (ID: {up_id})")
     #print(f"🚫 UNPUBLISH_PROFILE called!")
     """
     Unpublish the authenticated user's profile. Clears `public_token`.
