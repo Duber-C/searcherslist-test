@@ -2,7 +2,7 @@
 from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -14,6 +14,8 @@ from .otp_models import OTP
 from .email_service import EmailService
 import sys
 import os
+import uuid
+import secrets
 
 # Add the ai_profile_creation directory to Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'ai_profile_creation'))
@@ -23,13 +25,14 @@ User = get_user_model()
 
 # Public profile view by email (for preview/public-profile page)
 @api_view(['GET'])
-def public_profile_view(request, email):
+@permission_classes([AllowAny])
+def public_profile_view(request, token):
     """
-    Get public profile data by email (for preview/public-profile page)
+    Get public profile data by opaque token (for preview/public-profile page)
     """
     try:
-        print(f"🔍 Fetching public profile for email: {email}")
-        user = User.objects.get(email=email)
+        print(f"🔍 Fetching public profile for token: {token}")
+        user = User.objects.get(public_token=token)
         # You can filter which fields to expose publicly here
         public_data = {
             'first_name': user.first_name,
@@ -341,6 +344,7 @@ def create_profile(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@ensure_csrf_cookie
 def get_user_profile(request):
     """
     Get existing user profile data for prefilling forms
@@ -396,6 +400,7 @@ def get_user_profile(request):
                 # File URLs if they exist
                 'resumeUrl': user.resume.url if user.resume else None,
                 'buyerProfileUrl': user.buyer_profile.url if user.buyer_profile else None,
+                'publicToken': str(user.public_token) if user.public_token else None,
             }
         }, status=status.HTTP_200_OK)
         
@@ -413,14 +418,39 @@ def get_user_profile(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def publish_profile(request):
+    print(f"🚀 PUBLISH_PROFILE called for user: {request.user.email} (ID: {request.user.id})")
     """
     Publish the authenticated user's profile. Marks `published=True`.
     If the profile is not marked completed, mark it completed as well.
     """
     try:
-        user = request.user
+        # Determine acting user: prefer Bearer token owner if provided, otherwise fall back to session user
+        user = None
+        token_owner = None
+        auth = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
+        if auth and isinstance(auth, str) and auth.lower().startswith('bearer '):
+            token = auth.split(None, 1)[1].strip()
+            try:
+                token_owner = User.objects.get(api_token=token)
+            except User.DoesNotExist:
+                token_owner = None
+
+        if token_owner:
+            user = token_owner
+        elif getattr(request, 'user', None) and request.user.is_authenticated:
+            user = request.user
+
         if not user:
             return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Diagnostic logging: show which user the server thinks is making this request and auth method
+        try:
+            auth_method = 'bearer' if token_owner else 'session'
+            print(f"🔐 publish_profile called by user: email={getattr(user, 'email', None)} id={getattr(user, 'id', None)} auth_method={auth_method}")
+        except Exception:
+            print(f"🔐 publish_profile called by user (repr): {repr(user)}")
+        print(f"🔍 Request.COOKIES: {request.COOKIES}")
+        print(f"🔍 Request META Cookie header: {request.META.get('HTTP_COOKIE')}")
 
         # Set published flag
         user.published = True
@@ -432,16 +462,92 @@ def publish_profile(request):
         else:
             user.save(update_fields=['published'])
 
+        # Ensure a public token exists for shareable public profile links
+        if not user.public_token:
+            user.public_token = uuid.uuid4()
+            user.save(update_fields=['public_token'])
+
+        # Ensure an api_token exists for bearer auth (generate if missing)
+        if not getattr(user, 'api_token', None):
+            user.api_token = uuid.uuid4().hex
+            user.save(update_fields=['api_token'])
+
         return Response({
             'success': True,
             'message': 'Profile published successfully',
             'published': user.published,
-            'profile_completed': user.profile_completed
+            'profile_completed': user.profile_completed,
+            'public_token': str(user.public_token) if user.public_token else None,
+            'api_token': user.api_token
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
         print(f"❌ Error publishing profile: {e}")
         return Response({'success': False, 'message': 'Error publishing profile', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+#@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def unpublish_profile(request):
+    print(f"🚫 UNPUBLISH_PROFILE called for user: {request} (ID: {request.user.id})")
+    #print(f"🚫 UNPUBLISH_PROFILE called!")
+    """
+    Unpublish the authenticated user's profile. Clears `public_token`.
+    """
+    try:
+        # Determine acting user: prefer Bearer token owner if provided, otherwise fall back to session user
+        user = None
+        token_owner = None
+        auth_header = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
+        if auth_header and isinstance(auth_header, str) and auth_header.lower().startswith('bearer '):
+            token = auth_header.split(None, 1)[1].strip()
+            try:
+                token_owner = User.objects.get(api_token=token)
+            except User.DoesNotExist:
+                token_owner = None
+
+        if token_owner:
+            user = token_owner
+        elif getattr(request, 'user', None) and request.user.is_authenticated:
+            user = request.user
+
+        if not user:
+            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Diagnostic logging: show which user the server thinks is making this request and auth method
+        try:
+            auth_method = 'bearer' if token_owner else 'session'
+            print(f"🔐 unpublish_profile called by user: email={getattr(user, 'email', None)} id={getattr(user, 'id', None)} auth_method={auth_method}")
+        except Exception:
+            print(f"🔐 unpublish_profile called by user (repr): {repr(user)}")
+        if auth_header:
+            try:
+                print(f"🔑 Authorization header received: {auth_header}")
+                if auth_header.lower().startswith('bearer '):
+                    token = auth_header.split(None, 1)[1].strip()
+                    masked = f"****{token[-6:]}" if len(token) > 6 else token
+                    print(f"🔒 Bearer token (masked): {masked}")
+            except Exception:
+                pass
+        print(f"🔍 Request.COOKIES: {request.COOKIES}")
+        print(f"🔍 Request META Cookie header: {request.META.get('HTTP_COOKIE')}")
+        if not user:
+            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user.published = False
+        # Save published flag; model.save() will also clear token, but do explicit clear for immediate consistency
+        user.save(update_fields=['published'])
+        print(f"🔒 Profile unpublished for user: {user.email} (ID: {user.id}) status {user.published}")
+        if user.public_token:
+            user.public_token = None
+            user.save(update_fields=['public_token'])
+
+        return Response({'success': True, 'message': 'Profile unpublished', 'published': user.published, 'public_token': None}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"❌ Error unpublishing profile: {e}")
+        return Response({'success': False, 'message': 'Error unpublishing profile', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -472,7 +578,12 @@ def publish_profile_dev(request):
         else:
             user.save(update_fields=['published'])
 
-        return Response({'success': True, 'message': 'Profile published (dev)', 'published': user.published}, status=status.HTTP_200_OK)
+        # Generate public token if missing
+        if not user.public_token:
+            user.public_token = uuid.uuid4()
+            user.save(update_fields=['public_token'])
+
+        return Response({'success': True, 'message': 'Profile published (dev)', 'published': user.published, 'public_token': str(user.public_token)}, status=status.HTTP_200_OK)
 
     except Exception as e:
         print(f"❌ Error in publish_profile_dev: {e}")
@@ -651,29 +762,40 @@ def verify_otp_general(request):
         
         # Mark OTP as used
         otp_verification.mark_as_used()
-        
+
         print(f"✅ OTP verified successfully for {email}")
-        
-        # Determine user status
+
+        # Determine user status and create an API bearer token for the frontend
+        api_token = None
         try:
-            user = User.objects.get(email=email)
+            user, created = User.objects.get_or_create(email=email, defaults={'username': email})
             if user.profile_completed:
                 account_status = 'finished'
                 next_action = 'dashboard'
             else:
                 account_status = 'incomplete'
                 next_action = 'complete_profile'
+
+            # Generate a secure API token (64 hex chars)
+            try:
+                api_token = secrets.token_hex(32)
+                user.api_token = api_token
+                user.save(update_fields=['api_token'])
+            except Exception as e:
+                print(f"❌ Failed to generate/save api_token for {email}: {e}")
+
         except User.DoesNotExist:
             account_status = 'new'
             next_action = 'create_profile'
-        
+
         return Response({
             'success': True,
             'message': 'OTP verified successfully!',
             'email': email,
             'account_status': account_status,
             'next_action': next_action,
-            'user_exists': account_status != 'new'
+            'user_exists': account_status != 'new',
+            'api_token': api_token
         })
         
     except Exception as e:
@@ -715,7 +837,16 @@ def verify_otp(request):
                     # Existing user - check profile completion to determine action
                     user = otp.user
                     user_data = UserSerializer(user).data
-                    
+
+                    # generate api_token for frontend to use as bearer token
+                    api_token = None
+                    try:
+                        api_token = secrets.token_hex(32)
+                        user.api_token = api_token
+                        user.save(update_fields=['api_token'])
+                    except Exception as e:
+                        print(f"❌ Failed to generate/save api_token for {user.email}: {e}")
+
                     if user.profile_completed:
                         # Complete profile - redirect to dashboard
                         return Response({
@@ -726,7 +857,8 @@ def verify_otp(request):
                             'account_status': 'finished',
                             'next_action': 'login',
                             'email': user.email,
-                            'user': user_data
+                            'user': user_data,
+                            'api_token': api_token
                         }, status=status.HTTP_200_OK)
                     else:
                         # Incomplete profile - redirect to profile creation
@@ -737,10 +869,21 @@ def verify_otp(request):
                             'action': 'redirect_to_profile_creation',
                             'account_status': 'incomplete',
                             'next_action': 'complete_profile',
-                            'user': user_data
+                            'user': user_data,
+                            'api_token': api_token
                         }, status=status.HTTP_200_OK)
                 else:
                     # New user - redirect to profile creation
+                    # Ensure minimal user exists and create api token
+                    api_token = None
+                    try:
+                        user, created = User.objects.get_or_create(email=email, defaults={'username': email})
+                        api_token = secrets.token_hex(32)
+                        user.api_token = api_token
+                        user.save(update_fields=['api_token'])
+                    except Exception as e:
+                        print(f"❌ Failed to create user/generate api_token for {email}: {e}")
+
                     return Response({
                         'success': True,
                         'message': 'Email verified! Please complete your profile.',
@@ -748,7 +891,8 @@ def verify_otp(request):
                         'action': 'redirect_to_profile_creation',
                         'account_status': 'new',
                         'next_action': 'create_profile',
-                        'email': email
+                        'email': email,
+                        'api_token': api_token
                     }, status=status.HTTP_200_OK)
             else:
                 return Response({
@@ -2826,12 +2970,25 @@ def verify_otp(request):
         otp_verification.signed_link.mark_as_used()
         
         print(f"✅ OTP verified successfully for {email}")
-        
+        # Create or find the user and generate an API token for bearer auth
+        api_token = None
+        try:
+            user, created = User.objects.get_or_create(email=email, defaults={'username': email})
+            try:
+                api_token = secrets.token_hex(32)
+                user.api_token = api_token
+                user.save(update_fields=['api_token'])
+            except Exception as e:
+                print(f"❌ Failed to generate/save api_token for {email}: {e}")
+        except Exception as e:
+            print(f"❌ Failed to get/create user for signed link verification {email}: {e}")
+
         return Response({
             'status': 'success',
             'message': 'Access granted',
             'email': email,
-            'access_granted': True
+            'access_granted': True,
+            'api_token': api_token
         })
         
     except Exception as e:

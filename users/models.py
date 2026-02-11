@@ -73,6 +73,12 @@ class User(AbstractUser):
     profile_completed = models.BooleanField(default=False)
     # Whether the user has published their public profile
     published = models.BooleanField(default=False)
+
+    # Opaque public token for building public profile URLs (UUID)
+    # Generated when a user publishes their profile; nullable for existing users
+    public_token = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    # API bearer token for programmatic auth (do not expose publicly)
+    api_token = models.CharField(max_length=64, null=True, blank=True, unique=True, editable=False)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -142,8 +148,28 @@ class User(AbstractUser):
         # Clean website URL
         if self.website:
             self.website = self.clean_url_field(self.website)
-        
+
+        # Detect previous published state to know if we just published
+        previous_published = False
+        if self.pk:
+            try:
+                prev = User.objects.get(pk=self.pk)
+                previous_published = bool(prev.published)
+            except User.DoesNotExist:
+                previous_published = False
+
         super().save(*args, **kwargs)
+
+        # If the profile is published and we don't have a public token yet, generate one.
+        # If the profile was previously published but is now unpublished, remove the token.
+        if self.published and not self.public_token:
+            self.public_token = uuid.uuid4()
+            super().save(update_fields=['public_token'])
+
+        # If the profile was previously published and now is not, clear the token
+        if not self.published and previous_published and self.public_token:
+            self.public_token = None
+            super().save(update_fields=['public_token'])
 
     class Meta:
         db_table = 'users_user'

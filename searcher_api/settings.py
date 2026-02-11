@@ -162,6 +162,20 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Allow the frontend origin for CSRF checks (needed for cross-origin XHR POSTs)
+# Django requires full scheme-host entries in CSRF_TRUSTED_ORIGINS
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://www.searcherlist.com",
+]
+
+# For local development, relax SameSite so the CSRF cookie is sent on cross-site XHR
+# Set to None to allow cross-site requests (ensure HTTPS + Secure in production)
+CSRF_COOKIE_SAMESITE = None
+# During development we usually don't use HTTPS; ensure cookie isn't marked secure
+CSRF_COOKIE_SECURE = False
+
 # Media files for file uploads
 import os
 MEDIA_URL = '/media/'

@@ -24,7 +24,7 @@ class UserAdmin(BaseUserAdmin):
     list_display = [
         'username', 'email', 'first_name', 'last_name', 
         'phone_number', 'country', 'city', 'current_role', 'company', 
-        'profile_completed', 'published', 'is_staff', 'created_at'
+        'profile_completed', 'published', 'public_token', 'is_staff', 'created_at'
     ]
     
     # Fields to filter by
@@ -71,7 +71,7 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('resume', 'buyer_profile')
         }),
         ('Profile Status', {
-            'fields': ('profile_completed','published',)
+            'fields': ('profile_completed','published','public_token')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -96,7 +96,7 @@ class UserAdmin(BaseUserAdmin):
     )
     
     # Read-only fields
-    readonly_fields = ['created_at', 'updated_at', 'professional_experience_display', 'education_display']
+    readonly_fields = ['created_at', 'updated_at', 'professional_experience_display', 'education_display', 'public_token']
     
     def professional_experience_display(self, obj):
         """Display professional experience in a formatted way with management controls"""

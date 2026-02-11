@@ -282,9 +282,9 @@ class UserSerializer(serializers.ModelSerializer):
             'value_proposition', 'areas_of_expertise', 'investment_experience',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'current_role', 'company', 'years_experience', 'profile_completed',
-            'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages', 'published'
+            'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages', 'published', 'public_token'
         ]
-        read_only_fields = ['id', 'username', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'username', 'created_at', 'updated_at', 'public_token']
     
     def get_resume_url(self, obj):
         """Get the URL for the resume file if it exists"""
