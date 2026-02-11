@@ -416,7 +416,7 @@ def get_user_profile(request):
 
 @csrf_exempt
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def publish_profile(request):
     print(f"🚀 PUBLISH_PROFILE called for user: {request.user.email} (ID: {request.user.id})")
     """
@@ -487,8 +487,9 @@ def publish_profile(request):
 
 
 #@csrf_exempt
+@csrf_exempt
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def unpublish_profile(request):
     print(f"🚫 UNPUBLISH_PROFILE called for user: {request} (ID: {request.user.id})")
     #print(f"🚫 UNPUBLISH_PROFILE called!")
