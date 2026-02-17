@@ -35,6 +35,8 @@ class User(AbstractUser):
     
     # Background/overview
     background = models.TextField(blank=True, null=True)
+    # Acquisition target: what the user is looking to buy (explicit buyer profile content preferred)
+    acquisition_target = models.TextField(blank=True, null=True, help_text="What the user is looking to buy; prefer explicit buyer profile content if uploaded")
     
     # Professional fields
     value_proposition = models.TextField(blank=True, null=True, help_text="What unique value do you bring?")

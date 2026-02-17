@@ -23,7 +23,7 @@ class UserAdmin(BaseUserAdmin):
     # Fields to display in the user list
     list_display = [
         'username', 'email', 'first_name', 'last_name', 
-        'phone_number', 'country', 'city', 'current_role', 'company', 
+        'phone_number', 'country', 'city', 'current_role', 'company', 'acquisition_target', 
         'profile_completed', 'published', 'public_token', 'is_staff', 'created_at'
     ]
     
@@ -36,7 +36,7 @@ class UserAdmin(BaseUserAdmin):
     # Fields to search
     search_fields = [
         'username', 'first_name', 'last_name', 'email', 
-        'phone_number', 'city', 'country', 'current_role', 'company'
+        'phone_number', 'city', 'country', 'current_role', 'company', 'acquisition_target'
     ]
     
     # Ordering
@@ -54,7 +54,7 @@ class UserAdmin(BaseUserAdmin):
         }),
         ('Professional Background', {
             'fields': (
-                'background', 'current_role', 'company', 'years_experience', 'bio'
+                'background', 'acquisition_target', 'current_role', 'company', 'years_experience', 'bio'
             )
         }),
         ('Investment & Expertise', {

@@ -67,6 +67,7 @@ EXTRACTION_SCHEMA = {
     "state": "string or null",
     "linkedin_url": "string or null",
     "background": "short summary or null",
+    "acquisition_target": "short summary of what the user is looking to buy or null (explicit buyer profile content should populate this)",
     "value_proposition": "short summary or null",
     "areas_of_expertise": "bullet list or null",
     "investment_experience": "string or null",
@@ -370,7 +371,7 @@ def extract_profile_from_multiple_sources(buyer_profile_text=None, resume_text=N
     
     if buyer_profile_text:
         sources.append(f"BUYER PROFILE (HIGHEST PRIORITY - Use for investment criteria, deal preferences, business focus):\n{buyer_profile_text}")
-        source_priorities.append("Buyer Profile: TOP priority for investment_experience, deal_size_preference, industry_focus, geographic_focus, value_proposition")
+        source_priorities.append("Buyer Profile: TOP priority for acquisition_target, investment_experience, deal_size_preference, industry_focus, geographic_focus, value_proposition")
     
     if resume_text:
         sources.append(f"RESUME/CV (HIGH PRIORITY - Use for detailed experience, achievements, education):\n{resume_text}")

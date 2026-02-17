@@ -78,7 +78,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'phone_number', 
             'country', 'city', 'state', 'linkedin_url',
             'resume', 'buyer_profile', 'background',
-            'value_proposition', 'areas_of_expertise', 'investment_experience',
+            'value_proposition', 'areas_of_expertise', 'investment_experience', 'acquisition_target', 'existing_buyer_profile',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'current_role', 'company', 'years_experience',
             'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages'
@@ -318,7 +318,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'phone_number', 
             'country', 'city', 'state', 'linkedin_url',
             'resume', 'buyer_profile', 'background',
-            'value_proposition', 'areas_of_expertise', 'investment_experience',
+            'value_proposition', 'areas_of_expertise', 'investment_experience', 'acquisition_target', 'existing_buyer_profile',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'current_role', 'company', 'years_experience',
             'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages'
