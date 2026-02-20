@@ -1,38 +1,22 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from ..serializers import QuestionSerializer
 
 
 @api_view(['GET'])
 def get_questions_list(request):
-    """
-    Get the list of active questions for the questionnaire
-    """
+    """Return active questionnaire questions serialized for the frontend."""
     try:
         from ..models import Question
 
         questions = Question.objects.filter(is_active=True).order_by('order')
-
-        questions_data = []
-        for question in questions:
-            question_data = {
-                'id': question.id,
-                'text': question.text,
-                'type': question.question_type,
-                'required': question.required,
-                'placeholder': question.placeholder or '',
-                'order': question.order
-            }
-
-            if question.options:
-                question_data['options'] = question.options
-
-            questions_data.append(question_data)
+        serializer = QuestionSerializer(questions, many=True)
 
         return Response({
             'status': 'success',
-            'questions': questions_data,
-            'total_questions': len(questions_data)
+            'questions': serializer.data,
+            'total_questions': len(serializer.data)
         })
 
     except Exception as e:
@@ -45,9 +29,7 @@ def get_questions_list(request):
 
 @api_view(['POST'])
 def test_questionnaire_answers(request):
-    """
-    Test endpoint to receive questionnaire answers in JSON format
-    """
+    """Test endpoint to receive questionnaire answers in JSON format."""
     try:
         answers = request.data.get('answers', {})
 

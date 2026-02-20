@@ -386,8 +386,30 @@ def extract_profile_from_multiple_sources(buyer_profile_text=None, resume_text=N
     if questionnaire_answers:
         # Format questionnaire answers for extraction
         questionnaire_text = "QUESTIONNAIRE ANSWERS (HIGH PRIORITY - Use for buyer-specific search criteria and preferences):\n"
+        import json
         for question_id, answer in questionnaire_answers.items():
-            if answer and answer.strip():
+            formatted_answer = None
+            if isinstance(answer, list):
+                parts = []
+                for item in answer:
+                    if isinstance(item, dict):
+                        # For AI input, prefer concise title/value only (omit subtitle)
+                        title = item.get('title') or item.get('label') or item.get('value')
+                        parts.append(f"{title}")
+                    else:
+                        parts.append(str(item))
+                formatted_answer = ', '.join(parts)
+            elif isinstance(answer, dict):
+                # For AI input, send concise title/value only (do not include subtitle)
+                title = answer.get('title') or answer.get('label') or answer.get('value')
+                formatted_answer = f"{title}"
+            else:
+                try:
+                    formatted_answer = str(answer)
+                except Exception:
+                    formatted_answer = json.dumps(answer)
+
+            if formatted_answer and formatted_answer.strip():
                 # Convert question IDs to readable format
                 question_map = {
                     'target_business_types': 'Target Business Types',
@@ -410,7 +432,7 @@ def extract_profile_from_multiple_sources(buyer_profile_text=None, resume_text=N
                     'well_suited': 'Why Well-Suited to be Owner'
                 }
                 question_label = question_map.get(question_id, question_id.replace('_', ' ').title())
-                questionnaire_text += f"- {question_label}: {answer}\n"
+                questionnaire_text += f"- {question_label}: {formatted_answer}\n"
         
         sources.append(questionnaire_text)
         source_priorities.append("Questionnaire: High priority for investment_experience, deal_size_preference, industry_focus, geographic_focus, value_proposition, areas_of_expertise, target search criteria")

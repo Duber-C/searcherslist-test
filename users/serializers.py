@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from .otp_models import OTP
 import re
+from .models import Question
 
 
 class NullableURLField(serializers.CharField):
@@ -281,9 +282,12 @@ class UserSerializer(serializers.ModelSerializer):
             'background', 'created_at', 'updated_at',
             'value_proposition', 'areas_of_expertise', 'investment_experience',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
+            'acquisition_target',
             'current_role', 'company', 'years_experience', 'profile_completed',
             'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages', 'published', 'public_token'
         ]
+        # include stored structured questionnaire answers
+        fields = fields + ['questionnaire_answers']
         read_only_fields = ['id', 'username', 'created_at', 'updated_at', 'public_token']
     
     def get_resume_url(self, obj):
@@ -372,3 +376,28 @@ class OTPSerializer(serializers.ModelSerializer):
             'is_verified', 'is_used', 'attempts', 'user_exists'
         ]
         read_only_fields = ['id', 'created_at', 'expires_at', 'is_verified', 'is_used', 'attempts', 'user_exists']
+
+
+class QuestionSerializer(serializers.ModelSerializer):
+    """Serializer to expose question metadata to the frontend.
+
+    Exposes `type` (maps to `question_type`) to match frontend naming.
+    """
+    type = serializers.CharField(source='question_type')
+    options = serializers.SerializerMethodField()
+    examples = serializers.SerializerMethodField()
+    extra = serializers.JSONField()
+    component = serializers.CharField(allow_null=True)
+    validation = serializers.JSONField()
+
+    class Meta:
+        model = Question
+        fields = ['id', 'text', 'type', 'required', 'placeholder', 'subtitle', 'order', 'page', 'options', 'examples', 'extra', 'component', 'validation', 'is_active']
+
+    def get_options(self, obj):
+        return obj.options or []
+    def get_examples(self, obj):
+        # Prefer explicit examples field, fallback to extra.examples
+        if getattr(obj, 'examples', None):
+            return obj.examples or []
+        return (obj.extra or {}).get('examples', [])

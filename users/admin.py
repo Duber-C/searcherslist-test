@@ -705,17 +705,17 @@ class AIInteractionLogAdmin(admin.ModelAdmin):
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     """Admin interface for Question model"""
-    list_display = ['id', 'text', 'question_type', 'required', 'order', 'is_active']
-    list_filter = ['question_type', 'required', 'is_active']
-    search_fields = ['text', 'placeholder']
-    ordering = ['order', 'id']
-    
+    list_display = ['id', 'text', 'subtitle', 'question_type', 'required', 'page', 'order', 'is_active', 'examples_display']
+    list_filter = ['question_type', 'required', 'is_active', 'page']
+    search_fields = ['text', 'placeholder', 'subtitle']
+    ordering = ['page', 'order', 'id']
+
     fieldsets = (
         ('Question Details', {
-            'fields': ('text', 'question_type', 'required', 'order', 'is_active')
+            'fields': ('text', 'subtitle', 'question_type', 'required', 'page', 'order', 'is_active')
         }),
         ('Options', {
-            'fields': ('options', 'placeholder'),
+            'fields': ('options', 'placeholder', 'examples'),
             'description': 'Options should be a JSON array for select type questions'
         }),
     )
@@ -723,6 +723,15 @@ class QuestionAdmin(admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         # Make order field editable but show it prominently
         return []
+
+    def examples_display(self, obj):
+        """Render the examples list as small chips for easy viewing in list display."""
+        examples = getattr(obj, 'examples', None) or []
+        if not examples:
+            return ''
+        parts = [f'<span style="display:inline-block;margin:0 4px 4px 0;padding:4px 8px;background:#f3f4f6;border-radius:12px;border:1px solid #e5e7eb;font-size:12px;color:#111">{str(x)}</span>' for x in examples]
+        return mark_safe(''.join(parts))
+    examples_display.short_description = 'Examples'
 
 
 @admin.register(Signed_links)

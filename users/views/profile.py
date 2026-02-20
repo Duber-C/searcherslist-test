@@ -17,13 +17,27 @@ User = get_user_model()
 # Public profile view by token (for preview/public-profile page)
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def public_profile_view(request, token):
+def public_profile_view(request, token=None):
     """
-    Get public profile data by opaque token (for preview/public-profile page)
+    Get public profile data by opaque token (for preview/public-profile page).
+    Supports two modes:
+    - GET /api/public-profile/<token>/  -> returns public profile for that token
+    - GET /api/public-profile/          -> when authenticated, returns the
+      authenticated user's public profile (so frontend can call the same
+      endpoint regardless of route presence)
     """
     try:
-        print(f"🔍 Fetching public profile for token: {token}")
-        user = User.objects.get(public_token=token)
+        if token:
+            print(f"🔍 Fetching public profile for token: {token}")
+            user = User.objects.get(public_token=token)
+        else:
+            # No token provided: use authenticated user if available
+            if request.user and getattr(request.user, 'is_authenticated', False):
+                user = request.user
+                print(f"🔍 Fetching public profile for authenticated user: {user.email}")
+            else:
+                return Response({'success': False, 'message': 'No token provided and user not authenticated'}, status=400)
+
         public_data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -38,6 +52,7 @@ def public_profile_view(request, token):
             'company': user.company,
             'current_role': user.current_role,
             'profile_completed': user.profile_completed,
+            'questionnaire_answers': getattr(user, 'questionnaire_answers', None),
         }
         return Response({'success': True, 'data': public_data})
     except User.DoesNotExist:
@@ -255,8 +270,12 @@ def create_profile(request):
     if serializer.is_valid():
         print(f"✅ Serializer is valid!")
         try:
+            # Debug: show acquisition_target present in mapped_data before save
+            print(f"🔍 MAPPED acquisition_target before save: {mapped_data.get('acquisition_target')}")
             user = serializer.save()
+            # Debug: show acquisition_target on saved user
             print(f"💾 User saved successfully: {user.email} (ID: {user.id})")
+            print(f"🔎 Saved user.acquisition_target: {getattr(user, 'acquisition_target', None)}")
             
             profile_complete = False
             try:
@@ -333,7 +352,9 @@ def get_user_profile(request):
     
     try:
         user = User.objects.get(email=email)
-        
+        # Debug: log acquisition_target being returned
+        print(f"📡 get_user_profile: user.email={user.email} acquisition_target={user.acquisition_target}")
+
         return Response({
             'success': True,
             'user_exists': True,
@@ -362,6 +383,8 @@ def get_user_profile(request):
                 'professionalExperience': user.professional_experience,
                 'certifications': user.certifications,
                 'achievements': user.achievements,
+                'acquisitionTarget': user.acquisition_target,
+                'acquisitionTargetRaw': user.existing_buyer_profile,
                 'website': user.website,
                 'bio': user.bio,
                 'skills': user.skills,

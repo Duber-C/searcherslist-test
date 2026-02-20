@@ -335,6 +335,16 @@ def multi_source_extraction(request):
                         extracted_data[key] = json.loads(extracted_data[key])
                     except Exception:
                         pass
+        # Persist raw questionnaire answers on the user record if possible
+        if questionnaire_answers and 'email' in request.data:
+            try:
+                user_email = request.data.get('email')
+                user = User.objects.filter(email=user_email).first()
+                if user:
+                    user.questionnaire_answers = questionnaire_answers
+                    user.save(update_fields=['questionnaire_answers'])
+            except Exception as e:
+                print(f"Failed to save questionnaire_answers to user record: {e}")
 
         response_data = {"status": "success", "message": f"Multi-source AI extraction completed using {len(available_sources)} sources", "extracted_data": extracted_data, "sources_processed": available_sources, "sources_count": len(available_sources)}
 

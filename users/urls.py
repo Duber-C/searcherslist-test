@@ -49,7 +49,10 @@ urlpatterns = [
     path('validate-signed-link/', views.validate_signed_link, name='validate_signed_link'),
     path('verify-access-code/', views.verify_otp, name='verify_access_code'),
     # public profile lookup by opaque token (not raw email)
+    # Support both token route and the no-token route which will return the
+    # authenticated user's public profile when present.
     path('public-profile/<str:token>/', views.public_profile_view, name='public_profile_view'),
+    path('public-profile/', views.public_profile_view, name='public_profile_current'),
     path('publish-profile/', views.publish_profile, name='publish_profile'),
     path('publish-profile-dev/', views.publish_profile_dev, name='publish_profile_dev'),
     # Debug: resolve bearer token to user (development only)

@@ -27,22 +27,48 @@ User = get_user_model()
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def public_profile_view(request, token):
+def public_profile_view(request, token=None):
     """
-    Get public profile data by opaque token (for preview/public-profile page)
+    Get public profile data by opaque token (for preview/public-profile page).
+    Supports two modes:
+    - GET /api/public-profile/<token>/  -> returns public profile for that token
+    - GET /api/public-profile/          -> when authenticated, returns the
+      authenticated user's public profile (so frontend can call the same
+      endpoint regardless of route presence)
     """
     try:
-        print(f"🔍 Fetching public profile for token: {token}")
-        # Try UUID public_token first (standard flow)
-        try:
-            token_uuid = uuid.UUID(str(token))
-            user = User.objects.get(public_token=token_uuid)
-        except (ValueError, ValidationError):
-            # Fallback: allow lookup by api_token for non-UUID opaque tokens
+        if token:
+            print(f"🔍 Fetching public profile for token: {token}")
+            # Try UUID public_token first (standard flow)
             try:
-                user = User.objects.get(api_token=token)
-            except User.DoesNotExist:
-                return Response({'success': False, 'message': 'User not found'}, status=404)
+                token_uuid = uuid.UUID(str(token))
+                user = User.objects.get(public_token=token_uuid)
+            except (ValueError, ValidationError):
+                # Fallback: allow lookup by api_token for non-UUID opaque tokens
+                try:
+                    user = User.objects.get(api_token=token)
+                except User.DoesNotExist:
+                    return Response({'success': False, 'message': 'User not found'}, status=404)
+        else:
+            # No token provided: allow Bearer auth via api_token header as well
+            user = None
+            auth_header = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
+            if auth_header and isinstance(auth_header, str) and auth_header.lower().startswith('bearer '):
+                token_val = auth_header.split(None, 1)[1].strip()
+                try:
+                    user = User.objects.get(api_token=token_val)
+                    print(f"🔍 Fetching public profile for bearer-token user: {getattr(user, 'email', None)}")
+                except User.DoesNotExist:
+                    user = None
+
+            # Fall back to session authentication if no bearer token matched
+            if not user and request.user and getattr(request.user, 'is_authenticated', False):
+                user = request.user
+                print(f"🔍 Fetching public profile for authenticated user: {user.email}")
+
+            if not user:
+                return Response({'success': False, 'message': 'No token provided and user not authenticated'}, status=400)
+
         public_data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
