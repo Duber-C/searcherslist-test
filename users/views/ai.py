@@ -217,7 +217,6 @@ def multi_source_extraction(request):
         from ai_profile_creation.chatGpt import extract_profile_from_multiple_sources, extract_text_from_docx
         import tempfile
         import os
-        import json
 
         def save_upload_to_temp(uploaded_file, suffix: str) -> str:
             fd, path = tempfile.mkstemp(suffix=suffix)

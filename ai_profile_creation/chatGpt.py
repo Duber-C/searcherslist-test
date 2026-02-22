@@ -400,9 +400,31 @@ def extract_profile_from_multiple_sources(buyer_profile_text=None, resume_text=N
                         parts.append(str(item))
                 formatted_answer = ', '.join(parts)
             elif isinstance(answer, dict):
-                # For AI input, send concise title/value only (do not include subtitle)
-                title = answer.get('title') or answer.get('label') or answer.get('value')
-                formatted_answer = f"{title}"
+                # Handle common composite answer formats (e.g., radio + from/to range)
+                # e.g. {"radio":"EBITDA","from":"5000000","to":"10000000"}
+                metric = answer.get('radio') or answer.get('metric') or answer.get('type')
+                frm = answer.get('from') or answer.get('min') or answer.get('low')
+                to_val = answer.get('to') or answer.get('max') or answer.get('high')
+                if metric or frm or to_val:
+                    range_parts = []
+                    if metric:
+                        range_parts.append(str(metric))
+                    if frm and to_val:
+                        range_parts.append(f"{frm} - {to_val}")
+                    elif frm:
+                        range_parts.append(f"from {frm}")
+                    elif to_val:
+                        range_parts.append(f"up to {to_val}")
+                    formatted_answer = ' '.join(range_parts)
+                else:
+                    # Generic dict: join key:value pairs for clarity
+                    kvs = []
+                    for k, v in answer.items():
+                        try:
+                            kvs.append(f"{k}: {v}")
+                        except Exception:
+                            kvs.append(f"{k}: {json.dumps(v)}")
+                    formatted_answer = ', '.join(kvs)
             else:
                 try:
                     formatted_answer = str(answer)

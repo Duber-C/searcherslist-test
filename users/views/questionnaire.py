@@ -39,7 +39,7 @@ def test_questionnaire_answers(request):
                 'message': 'No answers provided'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        print(f"DEBUG: Received questionnaire answers: {answers}")
+        # Received questionnaire answers (logging removed in production)
 
         if not isinstance(answers, dict):
             return Response({
