@@ -83,6 +83,10 @@ def public_profile_view(request, token=None):
             'company': user.company,
             'current_role': user.current_role,
             'profile_completed': user.profile_completed,
+            'areas_of_expertise': user.areas_of_expertise,
+            'achievements': user.achievements,
+            'city': user.city,
+            'phone_number': user.phone_number,
         }
         return Response({'success': True, 'data': public_data})
     except User.DoesNotExist:

@@ -6,6 +6,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.conf import settings
 from django.contrib.auth import get_user_model
 import uuid
+import re
 
 from ..serializers import (
     UserRegistrationSerializer, UserSerializer, UserUpdateSerializer
@@ -34,26 +35,58 @@ def public_profile_view(request, token=None):
             # No token provided: use authenticated user if available
             if request.user and getattr(request.user, 'is_authenticated', False):
                 user = request.user
-                print(f"🔍 Fetching public profile for authenticated user: {user.email}")
+                print(f"🔍 Fetching public profile for authenticated user: {user}")
             else:
                 return Response({'success': False, 'message': 'No token provided and user not authenticated'}, status=400)
 
-        public_data = {
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'bio': user.bio,
-            'background': user.background,
-            'acquisition_target': user.acquisition_target,
-            'existing_buyer_profile': user.existing_buyer_profile,
-            'linkedin_url': user.linkedin_url,
-            'education': user.education,
-            'professional_experience': user.professional_experience,
-            'skills': user.skills,
-            'company': user.company,
-            'current_role': user.current_role,
-            'profile_completed': user.profile_completed,
-            'questionnaire_answers': getattr(user, 'questionnaire_answers', None),
-        }
+        # Use the UserSerializer to produce a consistent public payload,
+        # then remove any sensitive token fields before returning.
+        serializer = UserSerializer(user)
+        print(f"🔍 Serialized user data for public profile: {serializer.data}")
+        # Make a plain dict copy so we can safely mutate and guarantee returned keys
+        public_data = dict(serializer.data) if serializer.data is not None else {}
+        # Remove tokens / sensitive fields
+        public_data.pop('public_token', None)
+        public_data.pop('api_token', None)
+
+        # Force-fill important professional fields from the model if missing
+        # Coerce to string when present to ensure the key appears in the JSON output
+        model_areas = getattr(user, 'areas_of_expertise', None)
+        # Always include the `areas_of_expertise` key in the public payload.
+        # Prefer the serializer value if present, otherwise fall back to the model value or empty string.
+        public_data['areas_of_expertise'] = (public_data.get('areas_of_expertise')
+                                            or (str(model_areas) if model_areas else ""))
+
+        model_invest = getattr(user, 'investment_experience', None)
+        if model_invest is not None:
+            public_data['investment_experience'] = str(model_invest)
+        else:
+            public_data['investment_experience'] = public_data.get('investment_experience')
+
+        # Ensure `skills` is present and reflects the model when serializer omits or mis-maps it
+        model_skills = getattr(user, 'skills', None)
+        # Prefer serializer-provided skills if non-empty; otherwise fall back to model value
+        public_data['skills'] = public_data.get('skills') or (str(model_skills) if model_skills is not None else None)
+
+        # Provide camelCase aliases for frontend compatibility
+        public_data['areasOfExpertise'] = public_data.get('areas_of_expertise')
+        public_data['investmentExperience'] = public_data.get('investment_experience')
+
+        # Normalize and expose skills: keep original string but also provide a parsed list.
+        # Accept separators: comma (,) and dash (-, –, —)
+        skills_text = public_data.get('skills') or (str(getattr(user, 'skills')) if getattr(user, 'skills', None) is not None else '')
+        public_data['skills'] = skills_text
+
+        if skills_text:
+            parts = re.split(r"[,\-–—]+", skills_text)
+            skills_list = [p.strip() for p in parts if p and p.strip()]
+        else:
+            skills_list = []
+
+        # Add both snake_case and camelCase parsed lists for frontend convenience
+        public_data['skills_parsed'] = skills_list
+        public_data['skillsList'] = skills_list
+
         return Response({'success': True, 'data': public_data})
     except User.DoesNotExist:
         return Response({'success': False, 'message': 'User not found'}, status=404)
