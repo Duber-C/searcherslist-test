@@ -100,8 +100,11 @@ def update_target_statement(request):
 
     try:
         user = User.objects.get(email=email)
-        if 'background' in request.data:
-            user.background = request.data['background']
+        # Accept either camelCase or snake_case from frontend
+        if 'targetStatement' in request.data:
+            user.target_statement = request.data['targetStatement']
+        elif 'target_statement' in request.data:
+            user.target_statement = request.data['target_statement']
         user.save()
         return Response({'message': 'Target statement updated successfully!', 'status': 'success'}, status=status.HTTP_200_OK)
     except User.DoesNotExist:

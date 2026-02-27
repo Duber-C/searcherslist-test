@@ -71,6 +71,9 @@ def public_profile_view(request, token=None):
         # Provide camelCase aliases for frontend compatibility
         public_data['areasOfExpertise'] = public_data.get('areas_of_expertise')
         public_data['investmentExperience'] = public_data.get('investment_experience')
+        # Ensure target_statement is always present and provide camelCase alias
+        public_data['target_statement'] = public_data.get('target_statement') or (str(getattr(user, 'target_statement')) if getattr(user, 'target_statement', None) else '')
+        public_data['targetStatement'] = public_data.get('target_statement')
 
         # Normalize and expose skills: keep original string but also provide a parsed list.
         # Accept separators: comma (,) and dash (-, –, —)
@@ -161,6 +164,7 @@ def map_frontend_fields(data, updating_existing_user=False):
         'yearsExperience': 'years_experience',
         'valueProposition': 'value_proposition',
         'areasOfExpertise': 'areas_of_expertise',
+        'targetStatement': 'target_statement',
         'investmentExperience': 'investment_experience',
         'dealSizePreference': 'deal_size_preference',
         'industryFocus': 'industry_focus',

@@ -33,6 +33,7 @@ EXTRACTION_SCHEMA = {
     "linkedin_url": "string or null",
     "background": "short summary or null",
     "value_proposition": "short summary or null",
+    "target_statement": "1 sentence with business type, size, geography or null (this is the new unified field for buyer profile content)",
     "areas_of_expertise": "bullet list or null",
     "investment_experience": "string or null",
     "deal_size_preference": "string or null",

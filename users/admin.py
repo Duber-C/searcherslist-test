@@ -24,7 +24,7 @@ class UserAdmin(BaseUserAdmin):
     list_display = [
         'username', 'email', 'first_name', 'last_name', 
         'phone_number', 'country', 'city', 'current_role', 'company', 'acquisition_target', 
-        'profile_completed', 'published', 'public_token', 'is_staff', 'created_at'
+        'target_statement', 'profile_completed', 'published', 'public_token', 'is_staff', 'created_at'
     ]
     
     # Fields to filter by
@@ -54,7 +54,7 @@ class UserAdmin(BaseUserAdmin):
         }),
         ('Professional Background', {
             'fields': (
-                'background', 'acquisition_target', 'current_role', 'company', 'years_experience', 'bio'
+                'background', 'target_statement', 'acquisition_target', 'current_role', 'company', 'years_experience', 'bio'
             )
         }),
         ('Investment & Expertise', {

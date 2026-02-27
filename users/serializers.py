@@ -79,7 +79,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'phone_number', 
             'country', 'city', 'state', 'linkedin_url',
             'resume', 'buyer_profile', 'background',
-            'value_proposition', 'areas_of_expertise', 'investment_experience', 'acquisition_target', 'existing_buyer_profile',
+            'value_proposition', 'areas_of_expertise', 'investment_experience', 'acquisition_target', 'existing_buyer_profile', 'target_statement',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'current_role', 'company', 'years_experience',
             'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages'
@@ -280,7 +280,7 @@ class UserSerializer(serializers.ModelSerializer):
             'resume', 'buyer_profile', 'resume_url', 'buyer_profile_url',
             'resume_upload', 'existing_buyer_profile',
             'background', 'created_at', 'updated_at',
-            'value_proposition', 'areas_of_expertise', 'investment_experience',
+            'value_proposition', 'areas_of_expertise', 'investment_experience', 'target_statement',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'acquisition_target',
             'current_role', 'company', 'years_experience', 'profile_completed',
@@ -322,7 +322,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'phone_number', 
             'country', 'city', 'state', 'linkedin_url',
             'resume', 'buyer_profile', 'background',
-            'value_proposition', 'areas_of_expertise', 'investment_experience', 'acquisition_target', 'existing_buyer_profile',
+            'value_proposition', 'areas_of_expertise', 'investment_experience', 'acquisition_target', 'existing_buyer_profile', 'target_statement',
             'deal_size_preference', 'industry_focus', 'geographic_focus',
             'current_role', 'company', 'years_experience',
             'education', 'professional_experience', 'certifications', 'achievements', 'website', 'bio', 'skills', 'languages'

@@ -37,11 +37,13 @@ class User(AbstractUser):
     background = models.TextField(blank=True, null=True)
     # Acquisition target: what the user is looking to buy (explicit buyer profile content preferred)
     acquisition_target = models.TextField(blank=True, null=True, help_text="What the user is looking to buy; prefer explicit buyer profile content if uploaded")
+    # Target statement: concise 1-sentence target (business type, size, geography)
+    target_statement = models.TextField(blank=True, null=True, help_text="Short target statement: 1 sentence with business type, size, geography")
     
     # Professional fields
     value_proposition = models.TextField(blank=True, null=True, help_text="What unique value do you bring?")
     areas_of_expertise = models.TextField(blank=True, null=True, help_text="Your key areas of expertise")
-    investment_experience = models.CharField(max_length=100, blank=True, null=True, help_text="Years of investment experience")
+    investment_experience = models.CharField(max_length=500, blank=True, null=True, help_text="Years of investment experience")
     deal_size_preference = models.CharField(max_length=200, blank=True, null=True, help_text="Preferred deal size range")
     industry_focus = models.TextField(blank=True, null=True, help_text="Industries you focus on")
     geographic_focus = models.CharField(max_length=200, blank=True, null=True, help_text="Geographic regions of focus")
