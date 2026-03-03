@@ -119,11 +119,20 @@ def public_profile_view(request, token=None):
             "phone_number": user.phone_number,
             "value_proposition": user.value_proposition,
             "target_statement": user.target_statement,
+
+            # ✅ ADD THIS (this is what your frontend expects for public profiles)
+            "deal_size_preference": getattr(user, "deal_size_preference", None)
+            or getattr(user, "dealSizePreference", None),
+
+            # (optional) If these should also appear publicly, add them too:
+            # "industry_focus": getattr(user, "industry_focus", None) or getattr(user, "industryFocus", None),
+            # "geographic_focus": getattr(user, "geographic_focus", None) or getattr(user, "geographicFocus", None),
+            # "revenue_range": getattr(user, "revenue_range", None) or getattr(user, "revenueRange", None),
+            # "ebitda_range": getattr(user, "ebitda_range", None) or getattr(user, "ebitdaRange", None),
         }
         return Response({"success": True, "data": public_data})
     except User.DoesNotExist:
         return Response({"success": False, "message": "User not found"}, status=404)
-
 
 class UserRegistrationView(generics.CreateAPIView):
     queryset = User.objects.all()
