@@ -72,7 +72,7 @@ EXTRACTION_SCHEMA = {
     "target_statement": "short sentence with business type, size, geography or null",
     "areas_of_expertise": "bullet list (separated by commas) or null",
     "investment_experience": "string or null",
-    "deal_size_preference": "string or null",
+    "deal_size_preference": "string, do not include any parentheses mentioning where it came from or null",
     "industry_focus": "summary or null",
     "geographic_focus": "string or null",
     "current_role": "string or null",
