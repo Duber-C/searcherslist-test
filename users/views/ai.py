@@ -214,6 +214,9 @@ def linkedin_import(request):
 @permission_classes([AllowAny])
 def multi_source_extraction(request):
     try:
+        print("DEBUG: Starting multi-source AI profile extraction...")
+        print("payload keys content", request.data)
+        print("questionnaire_answers", request.data.get("questionnaire_answers"))
         from ai_profile_creation.chatGpt import extract_profile_from_multiple_sources, extract_text_from_docx
         import tempfile
         import os
@@ -301,6 +304,51 @@ def multi_source_extraction(request):
             except Exception:
                 questionnaire_answers = None
 
+        # Normalize questionnaire answers so downstream extractor receives plain strings
+        questionnaire_answers_normalized = None
+        if questionnaire_answers:
+            def _norm_value(v):
+                if isinstance(v, dict):
+                    # composite radio + from/to pattern
+                    if any(k in v for k in ("radio", "from", "to")):
+                        parts = []
+                        if v.get("radio"):
+                            parts.append(str(v.get("radio")))
+                        f = v.get("from")
+                        t = v.get("to")
+                        if f and t:
+                            parts.append(f"{f}-{t}")
+                        elif f:
+                            parts.append(str(f))
+                        elif t:
+                            parts.append(str(t))
+                        return " ".join(parts) if parts else json.dumps(v)
+                    if "value" in v:
+                        return str(v["value"])
+                    if "title" in v:
+                        return str(v["title"])
+                    return json.dumps(v)
+                if isinstance(v, list):
+                    items = []
+                    for it in v:
+                        if isinstance(it, dict):
+                            if "value" in it:
+                                items.append(str(it["value"]))
+                            elif "title" in it:
+                                items.append(str(it["title"]))
+                            else:
+                                items.append(json.dumps(it))
+                        else:
+                            items.append(str(it))
+                    return ", ".join(items)
+                return str(v)
+
+            questionnaire_answers_normalized = {k: _norm_value(v) for k, v in questionnaire_answers.items()}
+            try: print("DEBUG: questionnaire_answers_normalized", questionnaire_answers_normalized)
+            except Exception: pass
+        else:
+            questionnaire_answers_normalized = None
+
         available_sources = []
         if buyer_profile_text and len(buyer_profile_text) > 100:
             available_sources.append("buyer_profile")
@@ -308,7 +356,7 @@ def multi_source_extraction(request):
             available_sources.append("resume")
         if linkedin_data:
             available_sources.append("linkedin")
-        if questionnaire_answers:
+        if questionnaire_answers_normalized:
             available_sources.append("questionnaire")
 
         if not available_sources:
@@ -318,7 +366,7 @@ def multi_source_extraction(request):
             buyer_profile_text=buyer_profile_text,
             resume_text=resume_text,
             linkedin_data=linkedin_data,
-            questionnaire_answers=questionnaire_answers,
+            questionnaire_answers=questionnaire_answers_normalized or questionnaire_answers,
             agent_name="Profile Extraction Agent",
             user=None,
             session_id=f"multi_source_upload_{hash(str(available_sources))}",
@@ -340,7 +388,8 @@ def multi_source_extraction(request):
                 user_email = request.data.get('email')
                 user = User.objects.filter(email=user_email).first()
                 if user:
-                    user.questionnaire_answers = questionnaire_answers
+                    # store normalized answers for easier inspection later
+                    user.questionnaire_answers = questionnaire_answers_normalized or questionnaire_answers
                     user.save(update_fields=['questionnaire_answers'])
             except Exception as e:
                 print(f"Failed to save questionnaire_answers to user record: {e}")
