@@ -154,27 +154,14 @@ class User(AbstractUser):
         # Clean website URL
         if self.website:
             self.website = self.clean_url_field(self.website)
-
-        # Detect previous published state to know if we just published
-        previous_published = False
-        if self.pk:
-            try:
-                prev = User.objects.get(pk=self.pk)
-                previous_published = bool(prev.published)
-            except User.DoesNotExist:
-                previous_published = False
-
+        
+        # Persist model first
         super().save(*args, **kwargs)
-
+        
         # If the profile is published and we don't have a public token yet, generate one.
-        # If the profile was previously published but is now unpublished, remove the token.
+        # Do NOT clear or change the public_token when a profile is unpublished — token persists.
         if self.published and not self.public_token:
             self.public_token = uuid.uuid4()
-            super().save(update_fields=['public_token'])
-
-        # If the profile was previously published and now is not, clear the token
-        if not self.published and previous_published and self.public_token:
-            self.public_token = None
             super().save(update_fields=['public_token'])
 
     class Meta:

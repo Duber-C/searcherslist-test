@@ -89,56 +89,34 @@ def publish_profile(request):
 @authentication_classes([ApiTokenAuthentication, SessionAuthentication])
 @permission_classes([IsAuthenticated])
 def unpublish_profile(request):
-    # Avoid accessing request.user attributes directly — user may be AnonymousUser
-    up_email = getattr(getattr(request, 'user', None), 'email', 'Anonymous')
-    up_id = getattr(getattr(request, 'user', None), 'id', 'N/A')
-    print(f"🚫 UNPUBLISH_PROFILE called. request.user: {up_email} (ID: {up_id})")
-    try:
-        # Determine acting user: prefer Bearer token owner if provided, otherwise fall back to session user
-        user = None
-        token_owner = None
-        auth_header = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
-        if auth_header and isinstance(auth_header, str) and auth_header.lower().startswith('bearer '):
-            token = auth_header.split(None, 1)[1].strip()
-            try:
-                token_owner = User.objects.get(api_token=token)
-            except User.DoesNotExist:
-                token_owner = None
-
-        if token_owner:
-            user = token_owner
-        elif getattr(request, 'user', None) and request.user.is_authenticated:
-            user = request.user
-
-        if not user:
-            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-
+    # Determine acting user (bearer token preferred, else session)
+    user = None
+    auth = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
+    token_owner = None
+    if auth and isinstance(auth, str) and auth.lower().startswith('bearer '):
+        token = auth.split(None, 1)[1].strip()
         try:
-            auth_method = 'bearer' if token_owner else 'session'
-            print(f"🔐 unpublish_profile called by user: email={getattr(user, 'email', None)} id={getattr(user, 'id', None)} auth_method={auth_method}")
-        except Exception:
-            print(f"🔐 unpublish_profile called by user (repr): {repr(user)}")
-        if auth_header:
-            try:
-                print(f"🔑 Authorization header received: {auth_header}")
-                if auth_header.lower().startswith('bearer '):
-                    token = auth_header.split(None, 1)[1].strip()
-                    masked = f"****{token[-6:]}" if len(token) > 6 else token
-                    print(f"🔒 Bearer token (masked): {masked}")
-            except Exception:
-                pass
-        print(f"🔍 Request.COOKIES: {request.COOKIES}")
-        print(f"🔍 Request META Cookie header: {request.META.get('HTTP_COOKIE')}")
+            token_owner = User.objects.get(api_token=token)
+        except User.DoesNotExist:
+            token_owner = None
 
+    if token_owner:
+        user = token_owner
+    elif getattr(request, 'user', None) and request.user.is_authenticated:
+        user = request.user
+
+    if not user:
+        return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    try:
         user.published = False
         user.save(update_fields=['published'])
-        print(f"🔒 Profile unpublished for user: {user.email} (ID: {user.id}) status {user.published}")
-        if user.public_token:
-            user.public_token = None
-            user.save(update_fields=['public_token'])
-
-        return Response({'success': True, 'message': 'Profile unpublished', 'published': user.published, 'public_token': None}, status=status.HTTP_200_OK)
-
+        # do NOT clear public_token — preserve it
+        return Response({
+            'success': True,
+            'message': 'Profile unpublished',
+            'published': user.published,
+            'public_token': str(user.public_token) if user.public_token else None
+        }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"❌ Error unpublishing profile: {e}")
         return Response({'success': False, 'message': 'Error unpublishing profile', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

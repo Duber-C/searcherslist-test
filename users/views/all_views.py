@@ -99,6 +99,10 @@ def public_profile_view(request, token=None):
                     status=400,
                 )
 
+        # Only return profile data for published profiles
+        if not getattr(user, "published", False):
+            return Response({"success": False, "message": "Profile not published"}, status=404)
+
         public_data = {
             "first_name": user.first_name,
             "last_name": user.last_name,
