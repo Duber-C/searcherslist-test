@@ -1,122 +1,143 @@
-from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.authentication import SessionAuthentication
-from ..authentication import ApiTokenAuthentication
-from rest_framework.permissions import IsAuthenticated
-from django.contrib.auth import get_user_model
+from rest_framework import status
 from django.conf import settings
+from django.contrib.auth import get_user_model
 import uuid
 
 User = get_user_model()
 
 
-@csrf_exempt
-@api_view(['POST'])
-@authentication_classes([ApiTokenAuthentication, SessionAuthentication])
-@permission_classes([IsAuthenticated])
-def publish_profile(request):
-    # Avoid accessing request.user attributes directly — user may be AnonymousUser
-    pu_email = getattr(getattr(request, 'user', None), 'email', 'Anonymous')
-    pu_id = getattr(getattr(request, 'user', None), 'id', 'N/A')
-    print(f"🚀 PUBLISH_PROFILE called. request.user: {pu_email} (ID: {pu_id})")
-    try:
-        # Determine acting user: prefer Bearer token owner if provided, otherwise fall back to session user
-        user = None
-        token_owner = None
-        auth = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
-        if auth and isinstance(auth, str) and auth.lower().startswith('bearer '):
-            token = auth.split(None, 1)[1].strip()
-            try:
-                token_owner = User.objects.get(api_token=token)
-            except User.DoesNotExist:
-                token_owner = None
-
-        if token_owner:
-            user = token_owner
-        elif getattr(request, 'user', None) and request.user.is_authenticated:
-            user = request.user
-
-        if not user:
-            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        try:
-            auth_method = 'bearer' if token_owner else 'session'
-            print(f"🔐 publish_profile called by user: email={getattr(user, 'email', None)} id={getattr(user, 'id', None)} auth_method={auth_method}")
-        except Exception:
-            print(f"🔐 publish_profile called by user (repr): {repr(user)}")
-        print(f"🔍 Request.COOKIES: {request.COOKIES}")
-        print(f"🔍 Request META Cookie header: {request.META.get('HTTP_COOKIE')}")
-
-        # Set published flag
-        user.published = True
-
-        # If profile wasn't completed, mark it completed now
-        if not user.profile_completed:
-            user.profile_completed = True
-            user.save(update_fields=['published', 'profile_completed'])
-        else:
-            user.save(update_fields=['published'])
-
-        # Ensure a public token exists for shareable public profile links
-        if not user.public_token:
-            user.public_token = uuid.uuid4()
-            user.save(update_fields=['public_token'])
-
-        # Ensure an api_token exists for bearer auth (generate if missing)
-        if not getattr(user, 'api_token', None):
-            user.api_token = uuid.uuid4().hex
-            user.save(update_fields=['api_token'])
-
-        return Response({
-            'success': True,
-            'message': 'Profile published successfully',
-            'published': user.published,
-            'profile_completed': user.profile_completed,
-            'public_token': str(user.public_token) if user.public_token else None,
-            'api_token': user.api_token
-        }, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        print(f"❌ Error publishing profile: {e}")
-        return Response({'success': False, 'message': 'Error publishing profile', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
-@csrf_exempt
-@api_view(['POST'])
-@authentication_classes([ApiTokenAuthentication, SessionAuthentication])
-@permission_classes([IsAuthenticated])
-def unpublish_profile(request):
-    # Determine acting user (bearer token preferred, else session)
-    user = None
-    auth = request.META.get('HTTP_AUTHORIZATION') or request.META.get('Authorization')
-    token_owner = None
-    if auth and isinstance(auth, str) and auth.lower().startswith('bearer '):
+def _resolve_user_from_request(request):
+    """
+    Resolve user from:
+    1) Authorization: Bearer <api_token>
+    2) session-authenticated request.user
+    """
+    # Bearer api_token
+    auth = request.META.get("HTTP_AUTHORIZATION") or request.META.get("Authorization")
+    if auth and isinstance(auth, str) and auth.lower().startswith("bearer "):
         token = auth.split(None, 1)[1].strip()
-        try:
-            token_owner = User.objects.get(api_token=token)
-        except User.DoesNotExist:
-            token_owner = None
+        user = User.objects.filter(api_token=token).first()
+        if user:
+            return user
 
-    if token_owner:
-        user = token_owner
-    elif getattr(request, 'user', None) and request.user.is_authenticated:
-        user = request.user
+    # Session auth
+    u = getattr(request, "user", None)
+    if u and getattr(u, "is_authenticated", False):
+        return u
 
+    return None
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def publish_profile(request):
+    """
+    Publish the current user's profile.
+    Used by the dashboard.
+
+    Auth:
+      - Authorization: Bearer <api_token> OR session user
+    """
+    user = _resolve_user_from_request(request)
     if not user:
-        return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(
+            {"success": False, "message": "Authentication required"},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
 
-    try:
-        user.published = False
-        user.save(update_fields=['published'])
-        # do NOT clear public_token — preserve it
-        return Response({
-            'success': True,
-            'message': 'Profile unpublished',
-            'published': user.published,
-            'public_token': str(user.public_token) if user.public_token else None
-        }, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({'success': False, 'message': 'Error unpublishing profile', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    user.published = True
+
+    # ensure public_token exists when publishing
+    if not getattr(user, "public_token", None):
+        user.public_token = uuid.uuid4()
+
+    # (optional) keep profile_completed consistent
+    if not getattr(user, "profile_completed", False):
+        user.profile_completed = True
+        user.save(update_fields=["published", "public_token", "profile_completed"])
+    else:
+        user.save(update_fields=["published", "public_token"])
+
+    return Response(
+        {
+            "success": True,
+            "message": "Profile published",
+            "published": True,
+            "public_token": str(user.public_token),
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def unpublish_profile(request):
+    user = _resolve_user_from_request(request)
+    if not user:
+        return Response(
+            {"success": False, "message": "Authentication required"},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user.published = False
+
+
+
+    user.save(update_fields=["published", "public_token"])
+
+    return Response(
+        {"success": True, "message": "Profile unpublished", "published": False},
+        status=status.HTTP_200_OK,
+    )
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def publish_profile_dev(request):
+    """
+    Development-only publish endpoint: publish profile by email without authentication.
+    Only available when settings.DEBUG is True.
+
+    Expected body: { "email": "user@example.com" }
+    """
+    if not getattr(settings, "DEBUG", False):
+        return Response(
+            {"success": False, "message": "Not allowed"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    email = request.data.get("email")
+    if not email:
+        return Response(
+            {"success": False, "message": "Email is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = User.objects.filter(email=email).first()
+    if not user:
+        return Response(
+            {"success": False, "message": "User not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    user.published = True
+    if not getattr(user, "public_token", None):
+        user.public_token = uuid.uuid4()
+
+    if not getattr(user, "profile_completed", False):
+        user.profile_completed = True
+        user.save(update_fields=["published", "public_token", "profile_completed"])
+    else:
+        user.save(update_fields=["published", "public_token"])
+
+    return Response(
+        {
+            "success": True,
+            "message": "Profile published (dev)",
+            "published": True,
+            "public_token": str(user.public_token),
+        },
+        status=status.HTTP_200_OK,
+    )

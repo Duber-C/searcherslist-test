@@ -89,29 +89,112 @@ def update_location(request):
         return Response({'message': str(e), 'status': 'error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['PATCH'])
+@api_view(["PATCH", "POST"])
 @permission_classes([AllowAny])
 def update_target_statement(request):
-    """Update target statement section"""
-    email = request.data.get('email')
-    if not email:
-        return Response({'message': 'Email is required', 'status': 'error'}, 
-                       status=status.HTTP_400_BAD_REQUEST)
+    print("🔥 update_target_statement called with method:", request.method)
+    print("   request.data keys:", list(request.data.keys()))
+    """
+    Update target_statement for a user identified by email.
 
+    Accepts any of these payload keys for safety/migrations:
+      - target_statement (preferred)
+      - targetStatement
+      - acquisition_target / acquisitionTarget (fallback)
+
+    Body can be JSON or form-data.
+
+    Returns the saved value so you can verify immediately.
+    """
     try:
-        user = User.objects.get(email=email)
-        # Accept either camelCase or snake_case from frontend
-        if 'targetStatement' in request.data:
-            user.target_statement = request.data['targetStatement']
-        elif 'target_statement' in request.data:
-            user.target_statement = request.data['target_statement']
-        user.save()
-        return Response({'message': 'Target statement updated successfully!', 'status': 'success'}, status=status.HTTP_200_OK)
-    except User.DoesNotExist:
-        return Response({'message': 'User not found', 'status': 'error'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({'message': str(e), 'status': 'error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # --- lightweight request debug (won't dump long text) ---
+        content_type = getattr(request, "content_type", None)
+        keys = list(getattr(request, "data", {}).keys())
+        print("🛠️ update_target_statement called")
+        print(f"   method={request.method} content_type={content_type} keys={keys}")
 
+        email = (request.data.get("email") or "").strip()
+        if not email:
+            print("   ❌ missing email")
+            return Response(
+                {"success": False, "message": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Accept multiple keys (so frontend/backend refactors don't break saves)
+        incoming = (
+            request.data.get("target_statement")
+            or request.data.get("targetStatement")
+            or request.data.get("acquisition_target")
+            or request.data.get("acquisitionTarget")
+        )
+
+        if incoming is None:
+            print("   ❌ missing target statement field in request.data")
+            return Response(
+                {
+                    "success": False,
+                    "message": "target_statement is required",
+                    "received_keys": keys,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Normalize to string (avoid None / non-string)
+        new_value = str(incoming)
+
+        # Don't spam logs: show length + preview
+        preview = new_value.replace("\n", "\\n")
+        preview = (preview[:120] + "...") if len(preview) > 120 else preview
+        print(f"   email={email}")
+        print(f"   new_value_len={len(new_value)} preview='{preview}'")
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            print("   ❌ user not found")
+            return Response(
+                {"success": False, "message": "User not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        before = getattr(user, "target_statement", None)
+        before_preview = (str(before)[:120] + "...") if before and len(str(before)) > 120 else before
+        print(f"   before_target_statement_preview='{before_preview}'")
+
+        # --- ACTUAL SAVE ---
+        user.target_statement = new_value
+        user.save(update_fields=["target_statement"])
+
+        # reload to confirm it really persisted
+        user.refresh_from_db(fields=["target_statement"])
+        after = getattr(user, "target_statement", None)
+        after_preview = (str(after)[:120] + "...") if after and len(str(after)) > 120 else after
+        print(f"   ✅ saved_target_statement_preview='{after_preview}'")
+
+        return Response(
+            {
+                "success": True,
+                "message": "Target statement updated",
+                "email": user.email,
+                "saved": {
+                    "target_statement": user.target_statement,
+                    "length": len(user.target_statement or ""),
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    except Exception as e:
+        # Print full traceback in dev
+        import traceback
+
+        print("💥 update_target_statement exception:", str(e))
+        print(traceback.format_exc())
+        return Response(
+            {"success": False, "message": "Server error", "error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+    
 
 @api_view(['PATCH'])
 @permission_classes([AllowAny])

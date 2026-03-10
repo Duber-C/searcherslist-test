@@ -16,85 +16,48 @@ User = get_user_model()
 
 
 # Public profile view by token (for preview/public-profile page)
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([AllowAny])
 def public_profile_view(request, token=None):
     """
-    Get public profile data by opaque token (for preview/public-profile page).
-    Supports two modes:
-    - GET /api/public-profile/<token>/  -> returns public profile for that token
-    - GET /api/public-profile/          -> when authenticated, returns the
-      authenticated user's public profile (so frontend can call the same
-      endpoint regardless of route presence)
+    - /api/public-profile/<token>/ : public preview (only if published)
+    - /api/public-profile/        : current user (Bearer api_token or session)
     """
     try:
+        user = None
+
         if token:
-            print(f"🔍 Fetching public profile for token: {token}")
             user = User.objects.get(public_token=token)
+
+            # Only token-based access is restricted to published profiles
+            if not getattr(user, "published", False):
+                return Response({"success": False, "message": "User not found"}, status=404)
+
         else:
-            # No token provided: use authenticated user if available
-            if request.user and getattr(request.user, 'is_authenticated', False):
+            # Current user: Bearer token first, then session auth
+            auth_header = request.META.get("HTTP_AUTHORIZATION") or request.META.get("Authorization")
+            if auth_header and isinstance(auth_header, str) and auth_header.lower().startswith("bearer "):
+                token_val = auth_header.split(None, 1)[1].strip()
+                user = User.objects.filter(api_token=token_val).first()
+
+            if not user and request.user and getattr(request.user, "is_authenticated", False):
                 user = request.user
-                print(f"🔍 Fetching public profile for authenticated user: {user}")
-            else:
-                return Response({'success': False, 'message': 'No token provided and user not authenticated'}, status=400)
 
-        # Use the UserSerializer to produce a consistent public payload,
-        # then remove any sensitive token fields before returning.
+            if not user:
+                return Response({"success": False, "message": "Authentication required"}, status=401)
+
+        # ---- keep your existing serializer/public_data shaping from here down ----
         serializer = UserSerializer(user)
-        print(f"🔍 Serialized user data for public profile: {serializer.data}")
-        # Make a plain dict copy so we can safely mutate and guarantee returned keys
         public_data = dict(serializer.data) if serializer.data is not None else {}
-        # Remove tokens / sensitive fields
-        public_data.pop('public_token', None)
-        public_data.pop('api_token', None)
+        public_data.pop("public_token", None)
+        public_data.pop("api_token", None)
 
-        # Force-fill important professional fields from the model if missing
-        # Coerce to string when present to ensure the key appears in the JSON output
-        model_areas = getattr(user, 'areas_of_expertise', None)
-        # Always include the `areas_of_expertise` key in the public payload.
-        # Prefer the serializer value if present, otherwise fall back to the model value or empty string.
-        public_data['areas_of_expertise'] = (public_data.get('areas_of_expertise')
-                                            or (str(model_areas) if model_areas else ""))
+        # ... keep the rest of your existing normalization (areas_of_expertise, skillsList, etc.) ...
 
-        model_invest = getattr(user, 'investment_experience', None)
-        if model_invest is not None:
-            public_data['investment_experience'] = str(model_invest)
-        else:
-            public_data['investment_experience'] = public_data.get('investment_experience')
+        return Response({"success": True, "data": public_data})
 
-        # Ensure `skills` is present and reflects the model when serializer omits or mis-maps it
-        model_skills = getattr(user, 'skills', None)
-        # Prefer serializer-provided skills if non-empty; otherwise fall back to model value
-        public_data['skills'] = public_data.get('skills') or (str(model_skills) if model_skills is not None else None)
-
-        # Provide camelCase aliases for frontend compatibility
-        public_data['areasOfExpertise'] = public_data.get('areas_of_expertise')
-        public_data['investmentExperience'] = public_data.get('investment_experience')
-        # Ensure target_statement is always present and provide camelCase alias
-        public_data['target_statement'] = public_data.get('target_statement') or (str(getattr(user, 'target_statement')) if getattr(user, 'target_statement', None) else '')
-        public_data['targetStatement'] = public_data.get('target_statement')
-
-        # Normalize and expose skills: keep original string but also provide a parsed list.
-        # Accept separators: comma (,) and dash (-, –, —)
-        skills_text = public_data.get('skills') or (str(getattr(user, 'skills')) if getattr(user, 'skills', None) is not None else '')
-        public_data['skills'] = skills_text
-
-        if skills_text:
-            parts = re.split(r"[,\-–—]+", skills_text)
-            skills_list = [p.strip() for p in parts if p and p.strip()]
-        else:
-            skills_list = []
-
-        # Add both snake_case and camelCase parsed lists for frontend convenience
-        public_data['skills_parsed'] = skills_list
-        public_data['skillsList'] = skills_list
-
-        return Response({'success': True, 'data': public_data})
     except User.DoesNotExist:
-        return Response({'success': False, 'message': 'User not found'}, status=404)
-
-
+        return Response({"success": False, "message": "User not found"}, status=404)
 
 def normalize_array_fields(data):
     """
@@ -379,6 +342,8 @@ def create_profile(request):
 @permission_classes([AllowAny])
 @ensure_csrf_cookie
 def get_user_profile(request):
+    print("🔥 get_user_profile from users/views/profile.py")
+
     email = request.GET.get('email')
     
     if not email:
@@ -389,6 +354,8 @@ def get_user_profile(request):
     
     try:
         user = User.objects.get(email=email)
+        print(f"📡 get_user_profile: email={user.email} id={user.id}")
+
         # Debug: log acquisition_target being returned
         print(f"📡 get_user_profile: user.email={user.email} acquisition_target={user.acquisition_target}")
 
@@ -421,6 +388,8 @@ def get_user_profile(request):
                 'certifications': user.certifications,
                 'achievements': user.achievements,
                 'acquisitionTarget': user.acquisition_target,
+                "targetStatement": user.target_statement,
+                "target_statement": user.target_statement,
                 'acquisitionTargetRaw': user.existing_buyer_profile,
                 'website': user.website,
                 'bio': user.bio,

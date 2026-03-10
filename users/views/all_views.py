@@ -33,110 +33,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "ai_profile_creati
 User = get_user_model()
 
 
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def public_profile_view(request, token=None):
-    """
-    Get public profile data by opaque token (for preview/public-profile page).
-    Supports two modes:
-    - GET /api/public-profile/<token>/  -> returns public profile for that token
-    - GET /api/public-profile/          -> when authenticated, returns the
-      authenticated user's public profile (so frontend can call the same
-      endpoint regardless of route presence)
-    """
-    try:
-        if token:
-            print(f"🔍 Fetching public profile for token: {token}")
-            # Try UUID public_token first (standard flow)
-            try:
-                token_uuid = uuid.UUID(str(token))
-                user = User.objects.get(public_token=token_uuid)
-            except (ValueError, ValidationError):
-                # Fallback: allow lookup by api_token for non-UUID opaque tokens
-                try:
-                    user = User.objects.get(api_token=token)
-                except User.DoesNotExist:
-                    return Response(
-                        {"success": False, "message": "User not found"}, status=404
-                    )
-        else:
-            # No token provided: allow Bearer auth via api_token header as well
-            user = None
-            auth_header = request.META.get("HTTP_AUTHORIZATION") or request.META.get(
-                "Authorization"
-            )
-            if (
-                auth_header
-                and isinstance(auth_header, str)
-                and auth_header.lower().startswith("bearer ")
-            ):
-                token_val = auth_header.split(None, 1)[1].strip()
-                try:
-                    user = User.objects.get(api_token=token_val)
-                    print(
-                        f"🔍 Fetching public profile for bearer-token user: {getattr(user, 'email', None)}"
-                    )
-                except User.DoesNotExist:
-                    user = None
-
-            # Fall back to session authentication if no bearer token matched
-            if (
-                not user
-                and request.user
-                and getattr(request.user, "is_authenticated", False)
-            ):
-                user = request.user
-                print(
-                    f"🔍 Fetching public profile for authenticated user: {user.email}"
-                )
-
-            if not user:
-                return Response(
-                    {
-                        "success": False,
-                        "message": "No token provided and user not authenticated",
-                    },
-                    status=400,
-                )
-
-        # Only return profile data for published profiles
-        if not getattr(user, "published", False):
-            return Response({"success": False, "message": "Profile not published"}, status=404)
-
-        public_data = {
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "bio": user.bio,
-            "background": user.background,
-            "acquisition_target": user.acquisition_target,
-            "existing_buyer_profile": user.existing_buyer_profile,
-            "linkedin_url": user.linkedin_url,
-            "education": user.education,
-            "professional_experience": user.professional_experience,
-            "skills": user.skills,
-            "company": user.company,
-            "current_role": user.current_role,
-            "profile_completed": user.profile_completed,
-            "areas_of_expertise": user.areas_of_expertise,
-            "achievements": user.achievements,
-            "city": user.city,
-            "phone_number": user.phone_number,
-            "value_proposition": user.value_proposition,
-            "target_statement": user.target_statement,
-
-            # ✅ ADD THIS (this is what your frontend expects for public profiles)
-            "deal_size_preference": getattr(user, "deal_size_preference", None)
-            or getattr(user, "dealSizePreference", None),
-
-            # (optional) If these should also appear publicly, add them too:
-            # "industry_focus": getattr(user, "industry_focus", None) or getattr(user, "industryFocus", None),
-            # "geographic_focus": getattr(user, "geographic_focus", None) or getattr(user, "geographicFocus", None),
-            # "revenue_range": getattr(user, "revenue_range", None) or getattr(user, "revenueRange", None),
-            # "ebitda_range": getattr(user, "ebitda_range", None) or getattr(user, "ebitdaRange", None),
-        }
-        return Response({"success": True, "data": public_data})
-    except User.DoesNotExist:
-        return Response({"success": False, "message": "User not found"}, status=404)
 
 class UserRegistrationView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -272,10 +168,54 @@ def map_frontend_fields(data, updating_existing_user=False):
     mapped_data = normalize_array_fields(mapped_data)
     return mapped_data
 
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+def log_create_profile_request(request):
+    logger.warning("=== DEBUG /api/create-profile/ ===")
+    logger.warning("method=%s path=%s", getattr(request, "method", None), getattr(request, "path", None))
+    logger.warning("content_type=%s", getattr(request, "content_type", None))
+
+    # DRF: request.data (works for multipart/form-data)
+    data = getattr(request, "data", None)
+    if data is not None:
+      try:
+        logger.warning("request.data keys=%s", list(data.keys()))
+        for k in ["email", "education", "certifications", "professional_experience", "work_experience", "experience"]:
+            v = data.get(k, None)
+            logger.warning("request.data[%s]=%s", k, v)
+      except Exception as e:
+        logger.exception("Failed to log request.data: %s", e)
+
+    # Django: request.POST
+    post = getattr(request, "POST", None)
+    if post is not None:
+      try:
+        logger.warning("request.POST keys=%s", list(post.keys()))
+      except Exception as e:
+        logger.exception("Failed to log request.POST: %s", e)
+
+    raw = None
+    if data is not None:
+      raw = data.get("professional_experience") or data.get("work_experience") or data.get("experience")
+
+    if isinstance(raw, str) and raw.strip():
+      try:
+        parsed = json.loads(raw)
+        logger.warning("parsed experience type=%s len=%s", type(parsed).__name__, len(parsed) if hasattr(parsed, "__len__") else None)
+        logger.warning("parsed experience=%s", parsed)
+      except Exception as e:
+        logger.exception("JSON parse error for experience field: %s", e)
+
+    logger.warning("=== DEBUG /api/create-profile/ END ===")
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def create_profile(request):
+    log_create_profile_request(request)
+
     print(f"🚀 CREATE_PROFILE called!")
     print(f"🔍 Raw request.data: {request.data}")
     print(f"🔍 Request method: {request.method}")
@@ -448,56 +388,6 @@ def get_user_profile(request):
         )
 
 
-@csrf_exempt
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def publish_profile_dev(request):
-    try:
-        if not getattr(settings, "DEBUG", False):
-            return Response(
-                {"success": False, "message": "Not allowed"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        email = request.data.get("email")
-        if not email:
-            return Response(
-                {"success": False, "message": "Email is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response(
-                {"success": False, "message": "User not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        user.published = True
-        if not user.profile_completed:
-            user.profile_completed = True
-            user.save(update_fields=["published", "profile_completed"])
-        else:
-            user.save(update_fields=["published"])
-        if not user.public_token:
-            user.public_token = uuid.uuid4()
-            user.save(update_fields=["public_token"])
-        return Response(
-            {
-                "success": True,
-                "message": "Profile published (dev)",
-                "published": user.published,
-                "public_token": str(user.public_token),
-            },
-            status=status.HTTP_200_OK,
-        )
-    except Exception as e:
-        return Response(
-            {
-                "success": False,
-                "message": "Error publishing profile (dev)",
-                "error": str(e),
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
 
 
 @api_view(["GET"])
