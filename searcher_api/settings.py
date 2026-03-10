@@ -204,12 +204,16 @@ AUTH_USER_MODEL = 'users.User'
 
 # Email Configuration
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = env('EMAIL_PORT', default=587)
-EMAIL_USE_TLS = env('EMAIL_USE_TLS', default=True)
-EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@searcherlist.com')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='support@searcherlist.com')
+
+# AWS SES / django-ses config (read from .env)
+AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default='')
+AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default='')
+AWS_SES_REGION_NAME = env('AWS_SES_REGION_NAME', default='us-east-1')
+AWS_SES_REGION_ENDPOINT = env(
+    'AWS_SES_REGION_ENDPOINT',
+    default=f'email.{AWS_SES_REGION_NAME}.amazonaws.com'
+)
 
 # OTP Settings
 OTP_EXPIRY_MINUTES = 10
