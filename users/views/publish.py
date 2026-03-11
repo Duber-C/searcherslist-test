@@ -34,6 +34,7 @@ def _resolve_user_from_request(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def publish_profile(request):
+    print("Publish profile request received")
     """
     Publish the current user's profile.
     Used by the dashboard.
@@ -49,10 +50,7 @@ def publish_profile(request):
         )
 
     user.published = True
-
-    # ensure public_token exists when publishing
-    if not getattr(user, "public_token", None):
-        user.public_token = uuid.uuid4()
+    user.public_token = User.ensure_public_token(user, save=False)
 
     # (optional) keep profile_completed consistent
     if not getattr(user, "profile_completed", False):
@@ -124,7 +122,7 @@ def publish_profile_dev(request):
 
     user.published = True
     if not getattr(user, "public_token", None):
-        user.public_token = uuid.uuid4()
+        user.public_token = User.ensure_public_token(user, save=False)
 
     if not getattr(user, "profile_completed", False):
         user.profile_completed = True

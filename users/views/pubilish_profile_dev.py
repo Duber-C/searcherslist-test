@@ -3,11 +3,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 
+from ..models import User
 
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def publish_profile_dev(request):
+    print("Publish profile (dev) request received")
     try:
         if not getattr(settings, "DEBUG", False):
             return Response(
@@ -34,7 +36,7 @@ def publish_profile_dev(request):
         else:
             user.save(update_fields=["published"])
         if not user.public_token:
-            user.public_token = uuid.uuid4()
+            user.public_token = User.ensure_public_token(user, save=False)
             user.save(update_fields=["public_token"])
         return Response(
             {

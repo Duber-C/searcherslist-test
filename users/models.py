@@ -1,3 +1,5 @@
+import secrets
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
@@ -89,6 +91,34 @@ class User(AbstractUser):
     updated_at = models.DateTimeField(auto_now=True)
     # Raw structured questionnaire answers stored after profile creation/processing
     questionnaire_answers = models.JSONField(default=dict, blank=True, help_text="Structured questionnaire answers (may include option titles and subtitles)")
+    
+    token_create_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when api_token was first created",
+    )
+
+    def ensure_public_token(self, save=True):
+        print("Ensuring public token for user:", self.email)
+        """
+        Ensure public_token exists.
+        If token_create_at is NULL, set it once the first time we hit this method.
+        """
+        changed_fields = []
+
+        if self.token_create_at is None:
+            print("Setting token_create_at for user:", self.email)
+            self.token_create_at = timezone.now()
+            changed_fields.append("token_create_at")
+
+        if not self.public_token:
+            self.public_token = uuid.uuid4()
+            changed_fields.append("public_token")
+
+        if changed_fields:
+            self.save(update_fields=changed_fields)
+        print("token create at:", self.token_create_at, "public token:", self.public_token)
+        return self.public_token
     
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.username})"

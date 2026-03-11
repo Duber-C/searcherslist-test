@@ -24,7 +24,7 @@ class UserAdmin(BaseUserAdmin):
     list_display = [
         'username', 'email', 'first_name', 'last_name', 
         'phone_number', 'country', 'city', 'current_role', 'company', 'acquisition_target', 
-        'target_statement', 'profile_completed', 'published', 'public_token', 'is_staff', 'created_at'
+        'target_statement', 'profile_completed', 'published', 'public_token', 'is_staff', 'created_at', 'token_create_at'
     ]
     
     # Fields to filter by
@@ -74,8 +74,8 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('profile_completed','published','public_token')
         }),
         ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
+            'fields': ('created_at', 'updated_at', 'token_create_at'),
+            'classes': ('collapse',),
         }),
     )
     
@@ -96,7 +96,7 @@ class UserAdmin(BaseUserAdmin):
     )
     
     # Read-only fields
-    readonly_fields = ['created_at', 'updated_at', 'professional_experience_display', 'education_display', 'public_token']
+    readonly_fields = ['created_at', 'updated_at', 'professional_experience_display', 'education_display', 'public_token', 'token_create_at']
     
     def professional_experience_display(self, obj):
         """Display professional experience in a formatted way with management controls"""
@@ -486,7 +486,7 @@ class OTPAdmin(admin.ModelAdmin):
     search_fields = ['email', 'otp_code']
     
     readonly_fields = [
-        'otp_code', 'created_at', 'expires_at', 'user_exists', 'user'
+        'otp_code', 'created_at', 'expires_at', 'user_exists', 'user', 
     ]
     
     ordering = ['-created_at']
