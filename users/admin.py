@@ -862,3 +862,13 @@ class OTPVerificationAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'expires_at')
         })
     )
+
+
+from .models import SupportTicket
+
+@admin.register(SupportTicket)
+class SupportTicketAdmin(admin.ModelAdmin):
+    list_display = ("id", "status", "subject", "requester_email", "source", "created_at")
+    list_filter = ("status", "source", "created_at")
+    search_fields = ("subject", "requester_email", "message")
+    readonly_fields = ("created_at", "updated_at")

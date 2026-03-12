@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import otp_views
+from . import support_views
 
 app_name = 'users'
 
@@ -59,5 +60,5 @@ urlpatterns = [
     path('debug-token/', views.debug_resolve_token, name='debug_resolve_token'),
     # Unpublish profile (remove public token)
     path('unpublish-profile/', views.unpublish_profile, name='unpublish_profile'),
-
+    path("support/contact/", support_views.create_support_ticket, name="support_contact"),
 ]
