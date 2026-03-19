@@ -5,7 +5,7 @@ services:
     env_file:
       - .env.db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d $$POSTGRES_DB"]
       interval: 3s
@@ -37,4 +37,4 @@ services:
       DJANGO_SETTINGS_MODULE: searcher_api.settings
 
 volumes:
-  postgres_data:
+  postgres_data: {}
