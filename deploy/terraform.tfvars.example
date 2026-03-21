@@ -1,0 +1,63 @@
+aws_region = "us-east-1"
+
+project_name = "searchers-backend"
+environment  = "prod"
+
+repo_url    = "https://github.com/your-org/searchers-backend.git"
+repo_branch = "main"
+
+enable_codepipeline     = true
+pipeline_branch         = "main"
+codestar_connection_arn = ""
+pipeline_repo_owner     = "your-org"
+pipeline_repo_name      = "searchers-backend"
+
+instance_type = "t3.micro"
+key_name      = "your-ec2-keypair"
+app_dir       = "/opt/searchers-backend"
+app_port      = 8000
+
+allowed_ssh_cidrs = [
+]
+
+django_settings_module = "searcher_api.settings"
+django_secret_key = ""
+debug             = false
+
+allowed_hosts = [
+  "api.searcherlist.com",
+  "localhost",
+]
+
+cors_allowed_origins = [
+  "https://www.searcherlist.com",
+]
+
+csrf_trusted_origins = [
+  "https://www.searcherlist.com",
+  "https://api.searcherlist.com",
+]
+
+chat_gpt_secret_key = ""
+openai_api_key      = ""
+
+enable_django_ses = true
+email_backend      = "django_ses.SESBackend"
+default_from_email = "support@searcherlist.com"
+ses_identity_arn   = ""
+
+aws_access_key_id     = ""
+aws_secret_access_key = ""
+aws_ses_region_name   = "us-east-1"
+aws_ses_region_endpoint = "email.us-east-1.amazonaws.com"
+
+db_name                  = "postgres"
+db_username              = "postgres"
+db_engine_version        = "18"
+db_instance_class        = "db.t4g.micro"
+db_allocated_storage     = 20
+db_max_allocated_storage = 100
+
+db_skip_final_snapshot = false
+db_final_snapshot_identifier = null
+db_deletion_protection = false

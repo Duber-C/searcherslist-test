@@ -89,3 +89,25 @@ secrets.json
 # Temporary files
 *~
 .tmp
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Deploy local state
+deploy/.terraform/
+deploy/*.tfstate
+deploy/*.tfstate.*
+deploy/*.tfvars
+!deploy/terraform.tfvars.example
+deploy/*.tfplan
