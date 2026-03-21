@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+celery -A config.celery worker -l info -O fair
