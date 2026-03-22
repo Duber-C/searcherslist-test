@@ -456,6 +456,11 @@ resource "aws_codebuild_project" "deploy" {
     }
 
     environment_variable {
+      name  = "REPO_URL"
+      value = var.repo_url
+    }
+
+    environment_variable {
       name  = "APP_PORT"
       value = tostring(var.app_port)
     }
