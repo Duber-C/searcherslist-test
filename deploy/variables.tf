@@ -88,7 +88,7 @@ variable "pipeline_branch" {
 }
 
 variable "codestar_connection_arn" {
-  description = "AWS CodeStar connection ARN used by CodePipeline to read the Git repository."
+  description = "AWS CodeConnections or legacy CodeStar connection ARN used by CodePipeline to read the Git repository."
   type        = string
   default     = null
 }

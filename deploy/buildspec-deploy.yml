@@ -3,6 +3,7 @@ version: 0.2
 phases:
   build:
     commands:
+      - set -euo pipefail
       - echo "Starting deployment to ${EC2_INSTANCE_ID}"
       - export COMMIT_SHA="${CODEBUILD_RESOLVED_SOURCE_VERSION}"
       - |
@@ -20,5 +21,22 @@ phases:
         }
         EOF
       - COMMAND_ID=$(aws ssm send-command --instance-ids "${EC2_INSTANCE_ID}" --document-name "AWS-RunShellScript" --comment "Deploy ${COMMIT_SHA}" --parameters file://ssm-commands.json --query 'Command.CommandId' --output text)
-      - aws ssm wait command-executed --command-id "${COMMAND_ID}" --instance-id "${EC2_INSTANCE_ID}"
-      - aws ssm get-command-invocation --command-id "${COMMAND_ID}" --instance-id "${EC2_INSTANCE_ID}"
+      - echo "SSM command id: ${COMMAND_ID}"
+      - |
+        set +e
+        aws ssm wait command-executed --command-id "${COMMAND_ID}" --instance-id "${EC2_INSTANCE_ID}"
+        WAIT_EXIT=$?
+        set -e
+
+        INVOCATION_JSON=$(aws ssm get-command-invocation \
+          --command-id "${COMMAND_ID}" \
+          --instance-id "${EC2_INSTANCE_ID}" \
+          --output json)
+
+        echo "${INVOCATION_JSON}"
+
+        STATUS=$(printf '%s' "${INVOCATION_JSON}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Status"])')
+        if [ "${STATUS}" != "Success" ] || [ "${WAIT_EXIT}" -ne 0 ]; then
+          echo "Remote deployment failed with status: ${STATUS}" >&2
+          exit 1
+        fi

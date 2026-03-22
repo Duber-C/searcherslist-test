@@ -1,8 +1,13 @@
 locals {
-  name_prefix             = "${var.project_name}-${var.environment}"
-  ses_endpoint            = coalesce(var.aws_ses_region_endpoint, "email.${var.aws_ses_region_name}.amazonaws.com")
-  database_password       = coalesce(var.db_password, random_password.db_password.result)
-  codepipeline_enabled    = var.enable_codepipeline
+  name_prefix          = "${var.project_name}-${var.environment}"
+  ses_endpoint         = coalesce(var.aws_ses_region_endpoint, "email.${var.aws_ses_region_name}.amazonaws.com")
+  database_password    = coalesce(var.db_password, random_password.db_password.result)
+  codepipeline_enabled = var.enable_codepipeline
+  codeconnection_arns = var.codestar_connection_arn == null ? [] : distinct(compact([
+    var.codestar_connection_arn,
+    replace(var.codestar_connection_arn, "arn:aws:codestar-connections:", "arn:aws:codeconnections:"),
+    replace(var.codestar_connection_arn, "arn:aws:codeconnections:", "arn:aws:codestar-connections:")
+  ]))
   effective_email_backend = var.enable_django_ses ? "django_ses.SESBackend" : var.email_backend
   db_final_snapshot_identifier = coalesce(
     var.db_final_snapshot_identifier,
@@ -527,9 +532,10 @@ resource "aws_iam_role_policy" "codepipeline" {
       {
         Effect = "Allow"
         Action = [
-          "codestar-connections:UseConnection"
+          "codestar-connections:UseConnection",
+          "codeconnections:UseConnection"
         ]
-        Resource = var.codestar_connection_arn
+        Resource = local.codeconnection_arns
       }
     ]
   })

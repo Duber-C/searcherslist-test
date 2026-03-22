@@ -86,7 +86,7 @@ terraform apply
 ## Important assumptions
 
 - `repo_url` must be reachable from the EC2 instance. The included bootstrap uses `git clone`.
-- If CodePipeline is enabled, you must create and authorize the AWS CodeStar connection first.
+- If CodePipeline is enabled, you must create and authorize the AWS CodeConnections connection first. Older CodeStar connection ARNs also work.
 - If SES is enabled, the sender identity must already be verified in Amazon SES.
 - The current production deployment uses `prod.yml`, which builds from `compose/Dockerfile`.
 - The template expects Django to keep using:
