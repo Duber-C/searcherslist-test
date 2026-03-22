@@ -3,7 +3,7 @@ version: 0.2
 phases:
   build:
     commands:
-      - set -euo pipefail
+      - set -eu
       - echo "Starting deployment to ${EC2_INSTANCE_ID}"
       - export COMMIT_SHA="${CODEBUILD_RESOLVED_SOURCE_VERSION}"
       - |
