@@ -3,6 +3,12 @@ set -euxo pipefail
 
 dnf update -y
 dnf install -y docker docker-compose-plugin git
+
+# Fail the bootstrap immediately if the instance is missing deploy prerequisites.
+command -v git >/dev/null 2>&1
+command -v docker >/dev/null 2>&1
+docker compose version >/dev/null 2>&1
+
 systemctl enable --now docker
 usermod -aG docker ec2-user
 
