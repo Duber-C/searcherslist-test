@@ -108,7 +108,9 @@ terraform output -raw generated_db_password
 - Destroy will require `db_deletion_protection = false`.
 - If you want SSH access, create an AWS key pair first and set `key_name`.
 - The pipeline deploys by asking SSM to update the checked-out repository on the EC2 instance and run `docker compose --env-file .env.compose -f prod.yml up -d --build --no-deps django`.
-- The SSM deploy step also verifies `git` and `docker compose` are installed on the EC2 instance and installs them when the host has drifted or was created before the current bootstrap script.
+- The SSM deploy step assumes the EC2 host is already bootstrapped with `git`, Docker, and Docker Compose; if those prerequisites are missing, the deploy fails fast instead of trying to provision the server during deployment.
+- The EC2 bootstrap installs Docker Compose with the Linux CLI plugin layout under `/usr/local/lib/docker/cli-plugins/docker-compose` instead of relying on the Amazon Linux package repository.
+- `user_data_replace_on_change = true` is enabled so Terraform replaces the EC2 instance when bootstrap logic changes.
 - Static AWS app credentials are not required for SES if you use the EC2 instance role created by this template.
 
 ## Recommended follow-up
