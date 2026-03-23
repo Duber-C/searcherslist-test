@@ -3,7 +3,10 @@ set -euxo pipefail
 
 dnf update -y
 dnf install -y ruby wget docker awscli
-dnf install -y docker-compose-plugin
+
+# installing docker compose
+dnf config-manager --add-repo https://download.docker.com/linux/amazonlinux/docker-ce.repo
+dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 systemctl enable docker
 systemctl start docker
