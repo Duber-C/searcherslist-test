@@ -715,7 +715,7 @@ class QuestionAdmin(admin.ModelAdmin):
             'fields': ('text', 'subtitle', 'question_type', 'required', 'page', 'order', 'is_active')
         }),
         ('Options', {
-            'fields': ('options', 'placeholder', 'examples'),
+            'fields': ('options', 'placeholder', 'examples', 'helper_text'),
             'description': 'Options should be a JSON array for select type questions'
         }),
     )

@@ -392,7 +392,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'text', 'type', 'required', 'placeholder', 'subtitle', 'order', 'page', 'options', 'examples', 'extra', 'component', 'validation', 'is_active']
+        fields = ['id', 'text', 'type', 'required', 'placeholder', 'subtitle', 'order', 'page', 'options', 'examples', 'extra', 'component', 'validation', 'is_active', 'helper_text']
 
     def get_options(self, obj):
         return obj.options or []

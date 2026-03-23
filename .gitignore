@@ -18,6 +18,7 @@ media/
 .env
 .env.local
 .env.production
+.env.db
 
 # IDE
 .vscode/
