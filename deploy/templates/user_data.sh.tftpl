@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euxo pipefail
+
+dnf update -y
+dnf install -y ruby wget docker awscli
+dnf install -y docker-compose-plugin
+
+systemctl enable docker
+systemctl start docker
+
+mkdir -p ${deployment_dir}
+cat >$(dirname ${deployment_dir})/deploy.env <<EOF
+AWS_REGION=${aws_region}
+PROJECT_NAME=${project_name}
+EOF
+
+chmod 0644 $(dirname ${deployment_dir})/deploy.env
+
+cd /tmp
+wget https://aws-codedeploy-${aws_region}.s3.${aws_region}.amazonaws.com/latest/install
+chmod +x ./install
+./install auto
+
+systemctl enable codedeploy-agent
+systemctl start codedeploy-agent

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_ROOT="/opt/django-api"
+APP_DIR="${DEPLOY_ROOT}/app"
+
+mkdir -p "${APP_DIR}/src/staticfiles" "${APP_DIR}/src/media"
+touch "${DEPLOY_ROOT}/deploy.env"
+
+if ! command -v docker >/dev/null 2>&1; then
+  dnf update -y
+  dnf install -y docker
+  systemctl enable docker
+  systemctl start docker
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  dnf install -y docker-compose-plugin
+fi
+
+if ! command -v aws >/dev/null 2>&1; then
+  dnf install -y awscli
+fi
