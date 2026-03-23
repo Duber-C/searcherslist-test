@@ -435,6 +435,8 @@ class Question(models.Model):
     options = models.JSONField(default=list, blank=True, help_text="Options for select/radio/checkbox questions (list)")
     # Examples to show under the question (e.g., example business types)
     examples = models.JSONField(default=list, blank=True, help_text="Short example values to display for this question")
+    # helper text to show under the question
+    helper_text = models.CharField(default="", blank=True, help_text="Short help description")
     # Arbitrary extra data for highly-customized questions (rendered/used by frontend component)
     extra = models.JSONField(default=dict, blank=True, help_text="Additional JSON metadata for custom question components")
     # Frontend component identifier (optional): allows explicit mapping to a UI component
