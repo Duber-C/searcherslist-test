@@ -2,7 +2,7 @@
 set -euxo pipefail
 
 dnf update -y
-dnf install -y ruby wget docker awscli
+dnf install -y ruby wget awscli dnf-plugins-core
 
 # installing docker compose
 dnf config-manager --add-repo https://download.docker.com/linux/amazonlinux/docker-ce.repo
