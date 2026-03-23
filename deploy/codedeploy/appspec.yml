@@ -1,0 +1,29 @@
+version: 0.0
+os: linux
+
+files:
+  - source: /
+    destination: /opt/django-api/app
+    overwrite: true
+
+hooks:
+  ApplicationStop:
+    - location: deploy/codedeploy/scripts/stop.sh
+      timeout: 180
+      runas: root
+  BeforeInstall:
+    - location: deploy/codedeploy/scripts/install_dependencies.sh
+      timeout: 600
+      runas: root
+  AfterInstall:
+    - location: deploy/codedeploy/scripts/write_env.sh
+      timeout: 300
+      runas: root
+  ApplicationStart:
+    - location: deploy/codedeploy/scripts/start.sh
+      timeout: 900
+      runas: root
+  ValidateService:
+    - location: deploy/codedeploy/scripts/validate.sh
+      timeout: 120
+      runas: root

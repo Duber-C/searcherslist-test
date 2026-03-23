@@ -1,50 +1,32 @@
-output "ec2_instance_id" {
-  description = "EC2 instance ID running Django."
-  value       = aws_instance.django.id
-}
-
 output "ec2_public_ip" {
-  description = "Public IP for the Django EC2 instance."
-  value       = var.create_elastic_ip ? aws_eip.django[0].public_ip : aws_instance.django.public_ip
+  value = aws_eip.app.public_ip
 }
 
 output "ec2_public_dns" {
-  description = "Public DNS for the Django EC2 instance."
-  value       = aws_instance.django.public_dns
+  value = aws_instance.app.public_dns
 }
 
 output "rds_endpoint" {
-  description = "RDS Postgres endpoint."
-  value       = aws_db_instance.postgres.address
+  value = aws_db_instance.postgres.address
 }
 
-output "rds_port" {
-  description = "RDS Postgres port."
-  value       = aws_db_instance.postgres.port
+output "static_bucket_name" {
+  value = aws_s3_bucket.static.bucket
 }
 
-output "db_name" {
-  description = "Database name."
-  value       = aws_db_instance.postgres.db_name
+output "media_bucket_name" {
+  value = aws_s3_bucket.media.bucket
 }
 
-output "db_username" {
-  description = "Database username."
-  value       = aws_db_instance.postgres.username
-}
-
-output "generated_db_password" {
-  description = "Generated DB password when var.db_password is null."
-  value       = var.db_password == null ? random_password.db_password.result : null
-  sensitive   = true
+output "artifacts_bucket_name" {
+  value = aws_s3_bucket.artifacts.bucket
 }
 
 output "codepipeline_name" {
-  description = "CodePipeline name when enabled."
-  value       = var.enable_codepipeline ? aws_codepipeline.deploy[0].name : null
+  value = aws_codepipeline.app.name
 }
 
-output "codebuild_project_name" {
-  description = "CodeBuild project name when enabled."
-  value       = var.enable_codepipeline ? aws_codebuild_project.deploy[0].name : null
+output "codedeploy_app_name" {
+  value = aws_codedeploy_app.app.name
 }
+
