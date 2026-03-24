@@ -1,9 +1,13 @@
-from django.db import models
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 import random
 import string
 from datetime import timedelta
+
+from django.db import models
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+
+from users.models.user import Signed_links
+
 
 User = get_user_model()
 
@@ -122,3 +126,44 @@ class OTP(models.Model):
             return None
         except cls.DoesNotExist:
             return None
+
+
+class OTPVerification(models.Model):
+    """
+    Model for storing OTP codes for email verification
+    """
+    email = models.EmailField()
+    otp_code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(blank=True, null=True)
+    signed_link = models.ForeignKey(Signed_links, on_delete=models.CASCADE, related_name='otp_verifications', null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "OTP Verification"
+        verbose_name_plural = "OTP Verifications"
+        ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        if not self.otp_code:
+            # Generate 6-digit OTP
+            self.otp_code = ''.join(random.choices(string.digits, k=6))
+        if not self.expires_at:
+            # Set expiry to 10 minutes from creation
+            self.expires_at = timezone.now() + timezone.timedelta(minutes=10)
+        super().save(*args, **kwargs)
+    
+    def is_valid(self):
+        """Check if the OTP is still valid (not expired and not used)"""
+        return not self.used and timezone.now() < self.expires_at
+    
+    def mark_as_used(self):
+        """Mark the OTP as used"""
+        self.used = True
+        self.used_at = timezone.now()
+        self.save()
+    
+    def __str__(self):
+        status = "Used" if self.used else ("Expired" if timezone.now() > self.expires_at else "Valid")
+        return f"{self.email} - {self.otp_code} - {status}"

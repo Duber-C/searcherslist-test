@@ -535,3 +535,121 @@ def update_profile_section(request, section_name):
         print(f"DEBUG: Exception in update_profile_section: {str(e)}")
         print(f"DEBUG: Full traceback: {traceback.format_exc()}")
         return Response({'status': 'error', 'message': f'Server error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def save_professional_experience_data(request):
+    """
+    Endpoint to save professional experience data directly to the database
+    """
+    try:
+        email = request.data.get("email")
+        experience_data = request.data.get("experience_data")
+
+        if not email:
+            return Response(
+                {"status": "error", "message": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not experience_data:
+            return Response(
+                {"status": "error", "message": "Experience data is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        print(f"DEBUG: Saving professional experience for {email}")
+        print(f"DEBUG: Experience data type: {type(experience_data)}")
+
+        try:
+            user = User.objects.get(email=email)
+            print(f"DEBUG: Found existing user: {user.email}")
+        except User.DoesNotExist:
+            user, created = User.objects.get_or_create(
+                email=email,
+                defaults={
+                    "username": email,
+                    "is_active": True,
+                    "profile_completed": False,
+                },
+            )
+            print(f"DEBUG: {'Created' if created else 'Retrieved'} user: {user.email}")
+
+        if isinstance(experience_data, list):
+            user.professional_experience = experience_data
+            print(f"DEBUG: Saved {len(experience_data)} structured experiences")
+        elif isinstance(experience_data, str):
+            experiences = []
+            lines = experience_data.strip().split("\n")
+            current_experience = None
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    if current_experience:
+                        experiences.append(current_experience)
+                        current_experience = None
+                    continue
+                if line.split(".")[0].strip().isdigit():
+                    if current_experience:
+                        experiences.append(current_experience)
+                    line_without_number = ".".join(line.split(".")[1:]).strip()
+                    experience = {
+                        "id": len(experiences) + 1,
+                        "title": "",
+                        "company": "",
+                        "duration": "",
+                        "description": line_without_number,
+                    }
+                    if " at " in line_without_number:
+                        parts = line_without_number.split(" at ", 1)
+                        experience["title"] = parts[0].strip()
+                        remaining = parts[1].strip()
+                        date_pattern = r"\(([^)]+)\)"
+                        date_match = re.search(date_pattern, remaining)
+                        if date_match:
+                            experience["duration"] = date_match.group(1)
+                            experience["company"] = remaining[: date_match.start()].strip()
+                            desc_start = date_match.end()
+                            if desc_start < len(remaining):
+                                desc_text = remaining[desc_start:].strip()
+                                if desc_text:
+                                    experience["description"] = desc_text
+                        else:
+                            experience["company"] = remaining
+                    current_experience = experience
+                elif current_experience and line:
+                    if current_experience["description"] and current_experience[
+                        "description"
+                    ] != (current_experience["title"] + " at " + current_experience["company"]):
+                        current_experience["description"] += "\n" + line
+                    else:
+                        current_experience["description"] = line
+            if current_experience:
+                experiences.append(current_experience)
+            user.professional_experience = experiences
+            print(f"DEBUG: Parsed and saved {len(experiences)} experiences from text")
+
+        user.save()
+
+        return Response(
+            {
+                "status": "success",
+                "message": f"Successfully saved {len(user.professional_experience)} professional experiences",
+                "experiences_count": len(user.professional_experience),
+                "experiences": user.professional_experience,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    except Exception as e:
+        print(f"DEBUG: Error saving professional experience: {str(e)}")
+        import traceback
+        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
+        return Response(
+            {
+                "status": "error",
+                "message": f"Failed to save professional experience: {str(e)}",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

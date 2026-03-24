@@ -2,8 +2,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import get_user_model
-from .models import OTP
-from .email_service import EmailService
+from users.models import OTP
+from users.email_service import EmailService
 import logging
 
 logger = logging.getLogger(__name__)

@@ -7,6 +7,10 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 import uuid
 import re
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from ..serializers import (
     UserRegistrationSerializer, UserSerializer, UserUpdateSerializer
@@ -207,12 +211,50 @@ class UserListView(generics.ListAPIView):
             return User.objects.filter(id=self.request.user.id)
 
 
+def log_create_profile_request(request):
+    logger.warning("=== DEBUG /api/create-profile/ ===")
+    logger.warning("method=%s path=%s", getattr(request, "method", None), getattr(request, "path", None))
+    logger.warning("content_type=%s", getattr(request, "content_type", None))
+
+    data = getattr(request, "data", None)
+    if data is not None:
+        try:
+            logger.warning("request.data keys=%s", list(data.keys()))
+            for k in ["email", "education", "certifications", "professional_experience", "work_experience", "experience"]:
+                v = data.get(k, None)
+                logger.warning("request.data[%s]=%s", k, v)
+        except Exception as e:
+            logger.exception("Failed to log request.data: %s", e)
+
+    post = getattr(request, "POST", None)
+    if post is not None:
+        try:
+            logger.warning("request.POST keys=%s", list(post.keys()))
+        except Exception as e:
+            logger.exception("Failed to log request.POST: %s", e)
+
+    raw = None
+    if data is not None:
+        raw = data.get("professional_experience") or data.get("work_experience") or data.get("experience")
+
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            logger.warning("parsed experience type=%s len=%s", type(parsed).__name__, len(parsed) if hasattr(parsed, "__len__") else None)
+            logger.warning("parsed experience=%s", parsed)
+        except Exception as e:
+            logger.exception("JSON parse error for experience field: %s", e)
+
+    logger.warning("=== DEBUG /api/create-profile/ END ===")
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_profile(request):
     """
     Create or update user profile
     """
+    log_create_profile_request(request)
     print(f"🚀 CREATE_PROFILE called!")
     print(f"🔍 Raw request.data: {request.data}")
     print(f"🔍 Request method: {request.method}")
