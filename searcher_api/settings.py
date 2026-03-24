@@ -39,7 +39,11 @@ DEBUG = env('DEBUG')
 CHAT_GPT_SECRET_KEY = env('CHAT_GPT_SECRET_KEY')
 OPENAI_API_KEY = env('OPENAI_API_KEY')
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[
+    "api.searcherlist.com",
+    "localhost",
+    "127.0.0.1",
+])
 
 
 # Application definition
@@ -92,8 +96,12 @@ WSGI_APPLICATION = 'searcher_api.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('POSTGRES_DB', 'postgres'),
+        'USER': os.getenv('POSTGRES_USER', 'postgres'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
+        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+        'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
 }
 
@@ -154,27 +162,30 @@ REST_FRAMEWORK = {
 }
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://www.searcherlist.com",
-]
+])
 
 CORS_ALLOW_CREDENTIALS = True
 
 # Allow the frontend origin for CSRF checks (needed for cross-origin XHR POSTs)
 # Django requires full scheme-host entries in CSRF_TRUSTED_ORIGINS
-CSRF_TRUSTED_ORIGINS = [
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://www.searcherlist.com",
-]
+    "https://api.searcherlist.com",
+])
 
 # For local development, relax SameSite so the CSRF cookie is sent on cross-site XHR
 # Set to None to allow cross-site requests (ensure HTTPS + Secure in production)
-CSRF_COOKIE_SAMESITE = None
-# During development we usually don't use HTTPS; ensure cookie isn't marked secure
-CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 # Media files for file uploads
 import os
