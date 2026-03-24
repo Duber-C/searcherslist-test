@@ -43,6 +43,7 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[
     "api.searcherlist.com",
     "localhost",
     "127.0.0.1",
+    "*"
 ])
 
 
@@ -99,8 +100,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('POSTGRES_DB', 'postgres'),
         'USER': os.getenv('POSTGRES_USER', 'postgres'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
-        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'EPXY9waEQY38Ab7'),
+        'HOST': os.getenv('POSTGRES_HOST', 'database-2.c7wg4u00ehh0.us-east-2.rds.amazonaws.com'),
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
 }
