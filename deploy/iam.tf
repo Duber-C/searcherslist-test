@@ -54,6 +54,18 @@ resource "aws_iam_policy" "ec2_app" {
           aws_s3_bucket.media.arn,
           "${aws_s3_bucket.media.arn}/*",
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:ListBucket",
+        ]
+        Resource = [
+          aws_s3_bucket.artifacts.arn,
+          "${aws_s3_bucket.artifacts.arn}/*",
+        ]
       }
     ]
   })

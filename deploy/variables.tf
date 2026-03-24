@@ -37,7 +37,7 @@ variable "private_subnet_cidrs" {
 variable "instance_type" {
   description = "EC2 instance type for Django."
   type        = string
-  default     = "t3.small"
+  default     = "t3.micro"
 }
 
 variable "root_volume_size" {
