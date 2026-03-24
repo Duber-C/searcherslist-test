@@ -18,12 +18,12 @@ resource "aws_db_instance" "postgres" {
   backup_retention_period    = var.db_backup_retention_period
   multi_az                   = var.db_multi_az
   deletion_protection        = var.db_deletion_protection
-  skip_final_snapshot        = false
+  skip_final_snapshot        = true
   final_snapshot_identifier  = "${local.name}-final"
   publicly_accessible        = false
   storage_encrypted          = true
   auto_minor_version_upgrade = true
   apply_immediately          = true
-  delete_automated_backups   = false
+  delete_automated_backups   = true
 }
 

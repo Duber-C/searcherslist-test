@@ -181,7 +181,7 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
 
 # For local development, relax SameSite so the CSRF cookie is sent on cross-site XHR
 # Set to None to allow cross-site requests (ensure HTTPS + Secure in production)
-CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SAMESITE = env('CSRF_COOKIE_SAMESITE', default='Lax')
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

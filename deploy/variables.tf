@@ -126,7 +126,7 @@ variable "db_multi_az" {
 variable "db_deletion_protection" {
   description = "Enable deletion protection on the RDS instance."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "app_port" {
