@@ -1,8 +1,10 @@
+from django.utils import timezone
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
-from django.utils import timezone
+from users.models import User
 
 
 @api_view(['POST'])
@@ -19,15 +21,14 @@ def create_signed_link(request):
         if not user_id or not resource:
             return Response({'status': 'error', 'message': 'user_id and resource required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from ..models import SignedLink, User
-
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response({'status': 'error', 'message': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
-        signed = SignedLink.objects.create(user=user, resource=resource, expires_at=expires_at)
+        # TODO: create or use de SignedLink model
+        # expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
+        # signed = SignedLink.objects.create(user=user, resource=resource, expires_at=expires_at)
 
         return Response({'status': 'success', 'signed_link': signed.token})
 
@@ -42,7 +43,7 @@ def validate_signed_link(request, token):
     Validate a signed link token and return the referenced resource if valid.
     """
     try:
-        from ..models import SignedLink
+        from users.models.link import SignedLink
 
         try:
             signed = SignedLink.objects.get(token=token)

@@ -101,6 +101,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if self.instance:
             for field_name, field in self.fields.items():
                 if field_name not in ['email']:  # Keep email as always required
+                    field.required = False
 
     def validate_email(self, value):
         """Validate email is unique (unless email is already verified or updating existing user)"""

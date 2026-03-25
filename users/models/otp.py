@@ -6,7 +6,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from users.models.user import Signed_links
+from users.models.link import Signed_links
 
 
 User = get_user_model()

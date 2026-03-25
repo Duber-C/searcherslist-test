@@ -6,11 +6,13 @@ from django.utils.safestring import mark_safe
 from django.urls import path
 from django.shortcuts import redirect
 from django.contrib import messages
-from django.http import JsonResponse
 from django.core.mail import send_mail
 from django.conf import settings
-from .otp_models import OTP
-from .models import Question, Signed_links, OTPVerification
+
+from users.models.question import Question
+from users.models.otp import OTPVerification, OTP
+from users.models.link import Signed_links
+
 
 User = get_user_model()
 

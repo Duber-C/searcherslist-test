@@ -9,7 +9,8 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 
-from users.models.user import User, OTPVerification
+from users.models.user import User
+from users.models.otp import OTPVerification
 
 
 @api_view(['POST'])

@@ -1,10 +1,11 @@
+import logging
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-import logging
 
-from .models import SupportTicket
-from .email_service import EmailService
+from users.models.support import SupportTicket
+from users.services.email import EmailService
 
 logger = logging.getLogger(__name__)
 
