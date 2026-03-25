@@ -1,14 +1,15 @@
+import secrets
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
+
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
-import secrets
 
-from ..models import User, OTPVerification
-# Note: avoid importing package-level `__all__` here to prevent circular imports
+from users.models.user import User, OTPVerification
 
 
 @api_view(['POST'])

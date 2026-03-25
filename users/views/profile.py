@@ -1,21 +1,22 @@
+import json
+import logging
+
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.contrib.auth import get_user_model
+
 from rest_framework import status, generics
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.conf import settings
-from django.contrib.auth import get_user_model
-import uuid
-import re
-import json
-import logging
 
-logger = logging.getLogger(__name__)
-
-from ..serializers import (
-    UserRegistrationSerializer, UserSerializer, UserUpdateSerializer
+from users.serializers.user import (
+    UserRegistrationSerializer,
+    UserSerializer,
+    UserUpdateSerializer
 )
 
+
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 

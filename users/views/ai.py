@@ -1,13 +1,13 @@
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from django.conf import settings
 import tempfile
 import os
 import json
 import traceback
 
-from ..models import User
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+
+from users.models.user import User
 from ai_profile_creation.chatGpt import (
     extract_profile_from_text,
     extract_text_from_docx,

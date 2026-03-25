@@ -90,7 +90,7 @@ class AIAgent(models.Model):
         verbose_name_plural = "AI Agents"
     
     def __str__(self):
-        return f"{self.name} ({self.get_agent_type_display()})"
+        return f"{self.name} ({self.agent_type})"
     
     def get_effective_temperature(self):
         """Get the temperature to use (custom or from AI service)"""
