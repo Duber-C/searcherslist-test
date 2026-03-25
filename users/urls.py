@@ -72,9 +72,9 @@ urlpatterns = [
     path('test-questionnaire/', test_questionnaire_answers, name='test_questionnaire_answers'),
     
     # Signed Links
-    path('create-signed-link/', create_signed_link, name='create_signed_link'),
     path('validate-signed-link/', validate_signed_link, name='validate_signed_link'),
-    path('verify-access-code/', verify_otp, name='verify_access_code'),
+    # path('create-signed-link/', create_signed_link, name='create_signed_link'),
+    # path('verify-access-code/', verify_otp, name='verify_access_code'),
 
     # public profile lookup by opaque token (not raw email)
     # Support both token route and the no-token route which will return the

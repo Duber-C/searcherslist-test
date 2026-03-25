@@ -41,9 +41,9 @@ class Question(models.Model):
     is_active = models.BooleanField(default=True, help_text="Whether this question is currently active")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['order']
-        
+
     def __str__(self):
         return f"{self.order}. {self.text[:50]}{'...' if len(self.text) > 50 else ''}"

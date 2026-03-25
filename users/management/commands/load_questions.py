@@ -10,7 +10,7 @@ class Command(BaseCommand):
         deleted_count, _ = Question.objects.all().delete()
         if deleted_count > 0:
             self.stdout.write(f'Deleted {deleted_count} existing questions')
-        
+
         # Define the questions from the questionnaire-slider.tsx
         questions_data = [
             # Required questions
@@ -62,7 +62,7 @@ class Command(BaseCommand):
                 'placeholder': 'e.g., Must be profitable, growth opportunities, specific industries to avoid',
                 'order': 6
             },
-            
+
             # Optional questions
             {
                 'id': 'industry_geo_experience',
@@ -173,11 +173,11 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.ERROR(f'Failed to create question {question_data["id"]}: {e}')
                 )
-        
+
         self.stdout.write(
             self.style.SUCCESS(f'Successfully created {created_count} questions!')
         )
-        
+
         self.stdout.write(
             self.style.WARNING('You can now view and edit these questions in the Django Admin at /admin/users/question/')
         )

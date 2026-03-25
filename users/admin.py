@@ -12,10 +12,15 @@ from django.conf import settings
 from users.models.question import Question
 from users.models.otp import OTPVerification, OTP
 from users.models.link import Signed_links
+from users.models.support import SupportTicket
+from users.models.ai import AIService, AIAgent, AIInteractionLog
 
 
 User = get_user_model()
 
+# ==========================================
+# USER MODELS ADMIN CONFIGURATION
+# ==========================================
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
@@ -28,22 +33,22 @@ class UserAdmin(BaseUserAdmin):
         'phone_number', 'country', 'city', 'current_role', 'company', 'acquisition_target', 
         'target_statement', 'profile_completed', 'published', 'public_token', 'is_staff', 'created_at', 'token_create_at'
     ]
-    
+
     # Fields to filter by
     list_filter = [
         'is_staff', 'is_superuser', 'is_active', 'profile_completed',
         'published', 'country', 'state', 'created_at'
     ]
-    
+
     # Fields to search
     search_fields = [
         'username', 'first_name', 'last_name', 'email', 
         'phone_number', 'city', 'country', 'current_role', 'company', 'acquisition_target'
     ]
-    
+
     # Ordering
     ordering = ['-created_at']
-    
+
     # Fields to display in the user detail/edit form
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Basic Profile Information', {
@@ -80,7 +85,7 @@ class UserAdmin(BaseUserAdmin):
             'classes': ('collapse',),
         }),
     )
-    
+
     # Fields to display when creating a new user
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
         ('Basic Profile Information', {
@@ -96,10 +101,10 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('current_role', 'company', 'background')
         }),
     )
-    
+
     # Read-only fields
     readonly_fields = ['created_at', 'updated_at', 'professional_experience_display', 'education_display', 'public_token', 'token_create_at']
-    
+
     def professional_experience_display(self, obj):
         """Display professional experience in a formatted way with management controls"""
         if not obj.professional_experience or obj.professional_experience is None or not isinstance(obj.professional_experience, list):
@@ -108,27 +113,27 @@ class UserAdmin(BaseUserAdmin):
                 '<a href="{}add-experience/" class="button">Add Experience</a>',
                 f'/admin/users/user/{obj.pk}/'
             )
-        
+
         html_parts = [
             f'<div style="max-width: 800px;"><div style="margin-bottom: 10px;"><a href="/admin/users/user/{obj.pk}/add-experience/" class="button">Add New Experience</a></div>'
         ]
-        
+
         for i, exp in enumerate(obj.professional_experience):
             # Skip None entries
             if exp is None or not isinstance(exp, dict):
                 continue
-            
+
             # Safely get values, handling None cases
             exp_id = exp.get('id', i+1)
             title = exp.get('title') or 'No Title'
             company = exp.get('company') or 'No Company'  
             duration = exp.get('duration') or 'No Duration'
             description = exp.get('description') or 'No Description'
-            
+
             # Safely truncate description
             description_truncated = description[:200] if description and len(description) > 200 else description
             ellipsis = '...' if description and len(description) > 200 else ''
-                
+
             html_parts.append(f"""
             <div style='margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: #f8f9fa; color: #333; position: relative;'>
                 <div style='float: right; margin-left: 10px;'>
@@ -144,10 +149,10 @@ class UserAdmin(BaseUserAdmin):
             """)
         html_parts.append("</div>")
         return mark_safe("".join(html_parts))
-    
+
     professional_experience_display.allow_tags = True
     professional_experience_display.short_description = "Professional Experience (Formatted)"
-    
+
     def education_display(self, obj):
         """Display education in a formatted way with management controls"""
         if not obj.education or obj.education is None or not isinstance(obj.education, list):
@@ -156,27 +161,27 @@ class UserAdmin(BaseUserAdmin):
                 '<a href="{}add-education/" class="button">Add Education</a>',
                 f'/admin/users/user/{obj.pk}/'
             )
-        
+
         html_parts = [
             f'<div style="max-width: 800px;"><div style="margin-bottom: 10px;"><a href="/admin/users/user/{obj.pk}/add-education/" class="button">Add New Education</a></div>'
         ]
-        
+
         for i, edu in enumerate(obj.education):
             # Skip None entries
             if edu is None or not isinstance(edu, dict):
                 continue
-            
+
             # Safely get values, handling None cases
             degree = edu.get('degree') or 'No Degree'
             field = edu.get('field') or 'No Field'  
             school = edu.get('school') or 'No School'
             years = edu.get('years') or 'No Years'
             description = edu.get('description') or 'No Description'
-            
+
             # Safely truncate description
             description_truncated = description[:200] if description and len(description) > 200 else description
             ellipsis = '...' if description and len(description) > 200 else ''
-                
+
             html_parts.append(f"""
             <div style='margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: #f0f8ff; color: #333; position: relative;'>
                 <div style='float: right; margin-left: 10px;'>
@@ -192,16 +197,16 @@ class UserAdmin(BaseUserAdmin):
             """)
         html_parts.append("</div>")
         return mark_safe("".join(html_parts))
-    
+
     education_display.allow_tags = True
     education_display.short_description = "Education (Formatted)"
-    
+
     def get_readonly_fields(self, request, obj=None):
         """Make the formatted display field readonly"""
         readonly = list(super().get_readonly_fields(request, obj))
         readonly.extend(['created_at', 'updated_at', 'professional_experience_display', 'education_display'])
         return readonly
-    
+
     def get_urls(self):
         """Add custom URLs for experience and education management"""
         urls = super().get_urls()
@@ -218,11 +223,11 @@ class UserAdmin(BaseUserAdmin):
             path('<int:user_id>/move-education/<int:edu_index>/<str:direction>/', self.admin_site.admin_view(self.move_education_view), name='users_user_move_education'),
         ]
         return custom_urls + urls
-    
+
     def add_experience_view(self, request, user_id):
         """Add new professional experience"""
         user = User.objects.get(pk=user_id)
-        
+
         if request.method == 'POST':
             new_exp = {
                 'id': len(user.professional_experience) + 1,
@@ -231,15 +236,15 @@ class UserAdmin(BaseUserAdmin):
                 'duration': request.POST.get('duration', ''),
                 'description': request.POST.get('description', '')
             }
-            
+
             if not user.professional_experience:
                 user.professional_experience = []
             user.professional_experience.append(new_exp)
             user.save()
-            
+
             messages.success(request, f'Added experience: {new_exp["title"]} at {new_exp["company"]}')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         # Simple form for adding experience
         html = f'''
         <html><head><title>Add Professional Experience</title></head>
@@ -255,17 +260,17 @@ class UserAdmin(BaseUserAdmin):
         </body></html>
         '''
         return format_html(html)
-    
+
     def edit_experience_view(self, request, user_id, exp_index):
         """Edit existing professional experience"""
         user = User.objects.get(pk=user_id)
-        
+
         if exp_index >= len(user.professional_experience):
             messages.error(request, 'Experience not found')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         exp = user.professional_experience[exp_index]
-        
+
         if request.method == 'POST':
             user.professional_experience[exp_index] = {
                 'id': exp.get('id', exp_index + 1),
@@ -275,10 +280,10 @@ class UserAdmin(BaseUserAdmin):
                 'description': request.POST.get('description', '')
             }
             user.save()
-            
+
             messages.success(request, f'Updated experience: {request.POST.get("title")} at {request.POST.get("company")}')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         # Pre-filled form for editing
         html = f'''
         <html><head><title>Edit Professional Experience</title></head>
@@ -294,36 +299,36 @@ class UserAdmin(BaseUserAdmin):
         </body></html>
         '''
         return format_html(html)
-    
+
     def delete_experience_view(self, request, user_id, exp_index):
         """Delete professional experience"""
         user = User.objects.get(pk=user_id)
-        
+
         if exp_index >= len(user.professional_experience):
             messages.error(request, 'Experience not found')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         deleted_exp = user.professional_experience.pop(exp_index)
-        
+
         # Reindex remaining experiences
         for i, exp in enumerate(user.professional_experience):
             exp['id'] = i + 1
-        
+
         user.save()
-        
+
         messages.success(request, f'Deleted experience: {deleted_exp.get("title")} at {deleted_exp.get("company")}')
         return redirect(f'/admin/users/user/{user_id}/change/')
-    
+
     def move_experience_view(self, request, user_id, exp_index, direction):
         """Move professional experience up or down"""
         user = User.objects.get(pk=user_id)
-        
+
         if exp_index >= len(user.professional_experience):
             messages.error(request, 'Experience not found')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         experiences = user.professional_experience
-        
+
         if direction == 'up' and exp_index > 0:
             # Swap with previous
             experiences[exp_index], experiences[exp_index - 1] = experiences[exp_index - 1], experiences[exp_index]
@@ -334,19 +339,19 @@ class UserAdmin(BaseUserAdmin):
             messages.success(request, 'Moved experience down')
         else:
             messages.warning(request, 'Cannot move experience in that direction')
-        
+
         # Reindex all experiences
         for i, exp in enumerate(experiences):
             exp['id'] = i + 1
-        
+
         user.save()
         return redirect(f'/admin/users/user/{user_id}/change/')
-    
+
     # Education Management Methods
     def add_education_view(self, request, user_id):
         """Add new education entry"""
         user = User.objects.get(pk=user_id)
-        
+
         if request.method == 'POST':
             new_edu = {
                 'id': len(user.education) + 1,
@@ -356,15 +361,15 @@ class UserAdmin(BaseUserAdmin):
                 'years': request.POST.get('years', ''),
                 'description': request.POST.get('description', '')
             }
-            
+
             if not user.education:
                 user.education = []
             user.education.append(new_edu)
             user.save()
-            
+
             messages.success(request, f'Added education: {new_edu["degree"]} in {new_edu["field"]} from {new_edu["school"]}')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         html = f'''
         <html><head><title>Add Education</title></head>
         <body style="font-family: Arial, sans-serif; margin: 20px;">
@@ -380,17 +385,17 @@ class UserAdmin(BaseUserAdmin):
         </body></html>
         '''
         return format_html(html)
-    
+
     def edit_education_view(self, request, user_id, edu_index):
         """Edit existing education entry"""
         user = User.objects.get(pk=user_id)
-        
+
         if edu_index >= len(user.education):
             messages.error(request, 'Education entry not found')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         edu = user.education[edu_index]
-        
+
         if request.method == 'POST':
             user.education[edu_index] = {
                 'id': edu.get('id', edu_index + 1),
@@ -401,10 +406,10 @@ class UserAdmin(BaseUserAdmin):
                 'description': request.POST.get('description', '')
             }
             user.save()
-            
+
             messages.success(request, f'Updated education: {request.POST.get("degree")} in {request.POST.get("field")}')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         html = f'''
         <html><head><title>Edit Education</title></head>
         <body style="font-family: Arial, sans-serif; margin: 20px;">
@@ -420,36 +425,36 @@ class UserAdmin(BaseUserAdmin):
         </body></html>
         '''
         return format_html(html)
-    
+
     def delete_education_view(self, request, user_id, edu_index):
         """Delete education entry"""
         user = User.objects.get(pk=user_id)
-        
+
         if edu_index >= len(user.education):
             messages.error(request, 'Education entry not found')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         deleted_edu = user.education.pop(edu_index)
-        
+
         # Reindex remaining education entries
         for i, edu in enumerate(user.education):
             edu['id'] = i + 1
-        
+
         user.save()
-        
+
         messages.success(request, f'Deleted education: {deleted_edu.get("degree")} from {deleted_edu.get("school")}')
         return redirect(f'/admin/users/user/{user_id}/change/')
-    
+
     def move_education_view(self, request, user_id, edu_index, direction):
         """Move education entry up or down"""
         user = User.objects.get(pk=user_id)
-        
+
         if edu_index >= len(user.education):
             messages.error(request, 'Education entry not found')
             return redirect(f'/admin/users/user/{user_id}/change/')
-        
+
         education = user.education
-        
+
         if direction == 'up' and edu_index > 0:
             education[edu_index], education[edu_index - 1] = education[edu_index - 1], education[edu_index]
             messages.success(request, 'Moved education entry up')
@@ -458,73 +463,22 @@ class UserAdmin(BaseUserAdmin):
             messages.success(request, 'Moved education entry down')
         else:
             messages.warning(request, 'Cannot move education entry in that direction')
-        
+
         # Reindex all education entries
         for i, edu in enumerate(education):
             edu['id'] = i + 1
-        
+
         user.save()
         return redirect(f'/admin/users/user/{user_id}/change/')
-    
+
     def has_delete_permission(self, request, obj=None):
         """Only superusers can delete users"""
         return request.user.is_superuser
 
 
-@admin.register(OTP)
-class OTPAdmin(admin.ModelAdmin):
-    """
-    Admin interface for OTP model
-    """
-    list_display = [
-        'email', 'otp_code', 'user_exists', 'is_verified', 
-        'is_used', 'attempts', 'created_at', 'expires_at'
-    ]
-    
-    list_filter = [
-        'user_exists', 'is_verified', 'is_used', 'created_at'
-    ]
-    
-    search_fields = ['email', 'otp_code']
-    
-    readonly_fields = [
-        'otp_code', 'created_at', 'expires_at', 'user_exists', 'user', 
-    ]
-    
-    ordering = ['-created_at']
-    
-    fieldsets = (
-        ('OTP Information', {
-            'fields': ('email', 'otp_code', 'user_exists', 'user')
-        }),
-        ('Verification Status', {
-            'fields': ('is_verified', 'is_used', 'attempts', 'max_attempts')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'expires_at'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    def has_add_permission(self, request):
-        """Don't allow manual creation of OTPs through admin"""
-        return False
-    
-    def has_change_permission(self, request, obj=None):
-        """Allow viewing but limited editing"""
-        return True
-    
-    def has_delete_permission(self, request, obj=None):
-        """Allow deletion of expired/used OTPs"""
-        return True
-
-
 # ==========================================
 # AI MODELS ADMIN CONFIGURATION
 # ==========================================
-
-from .models import AIService, AIAgent, AIInteractionLog
-
 
 @admin.register(AIService)
 class AIServiceAdmin(admin.ModelAdmin):
@@ -538,7 +492,7 @@ class AIServiceAdmin(admin.ModelAdmin):
     list_filter = ['service_type', 'is_active', 'is_default', 'created_at']
     search_fields = ['name', 'model_name', 'service_type']
     ordering = ['-is_default', 'name']
-    
+
     fieldsets = (
         ('Basic Information', {
             'fields': ('name', 'service_type', 'model_name', 'description')
@@ -558,9 +512,9 @@ class AIServiceAdmin(admin.ModelAdmin):
             'fields': ('is_active', 'is_default'),
         }),
     )
-    
+
     readonly_fields = ('created_at', 'updated_at')
-    
+
     def get_readonly_fields(self, request, obj=None):
         if obj:  # editing an existing object
             return self.readonly_fields + ('created_at', 'updated_at')
@@ -579,7 +533,7 @@ class AIAgentAdmin(admin.ModelAdmin):
     list_filter = ['agent_type', 'ai_service', 'is_active', 'created_at']
     search_fields = ['name', 'description', 'agent_type']
     ordering = ['agent_type', 'name']
-    
+
     fieldsets = (
         ('Basic Information', {
             'fields': ('name', 'agent_type', 'description', 'is_active')
@@ -597,18 +551,18 @@ class AIAgentAdmin(admin.ModelAdmin):
             'classes': ('wide',)
         }),
     )
-    
+
     readonly_fields = ('created_at', 'updated_at')
-    
+
     def get_readonly_fields(self, request, obj=None):
         if obj:  # editing an existing object
             return self.readonly_fields + ('created_at', 'updated_at')
         return self.readonly_fields
-    
+
     def get_effective_temperature(self, obj):
         return obj.get_effective_temperature()
     get_effective_temperature.short_description = 'Temperature'
-    
+
     def get_effective_max_tokens(self, obj):
         return obj.get_effective_max_tokens()
     get_effective_max_tokens.short_description = 'Max Tokens'
@@ -633,7 +587,7 @@ class AIInteractionLogAdmin(admin.ModelAdmin):
     ]
     ordering = ['-request_timestamp']
     date_hierarchy = 'request_timestamp'
-    
+
     readonly_fields = [
         'agent', 'user', 'session_id', 'input_text', 'system_prompt_used', 
         'user_prompt_used', 'temperature_used', 'max_tokens_used', 'model_used',
@@ -642,7 +596,7 @@ class AIInteractionLogAdmin(admin.ModelAdmin):
         'output_tokens', 'total_tokens', 'input_cost', 'output_cost', 
         'total_cost', 'ip_address', 'user_agent', 'additional_metadata'
     ]
-    
+
     fieldsets = (
         ('Request Information', {
             'fields': ('agent', 'user', 'session_id', 'request_timestamp', 'ip_address', 'user_agent')
@@ -671,28 +625,28 @@ class AIInteractionLogAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    
+
     def has_add_permission(self, request):
         """Don't allow manual creation of logs"""
         return False
-    
+
     def has_change_permission(self, request, obj=None):
         """Allow viewing but no editing of logs"""
         return False
-    
+
     def has_delete_permission(self, request, obj=None):
         """Allow deletion of old logs"""
         return request.user.is_superuser
-    
+
     # Custom admin actions
     actions = ['mark_as_error', 'calculate_costs']
-    
+
     def mark_as_error(self, request, queryset):
         """Mark selected logs as error status"""
         updated = queryset.update(status='error')
         self.message_user(request, f'{updated} logs marked as error.')
     mark_as_error.short_description = "Mark selected logs as error"
-    
+
     def calculate_costs(self, request, queryset):
         """Recalculate costs for selected logs"""
         count = 0
@@ -703,6 +657,10 @@ class AIInteractionLogAdmin(admin.ModelAdmin):
         self.message_user(request, f'Costs recalculated for {count} logs.')
     calculate_costs.short_description = "Recalculate costs for selected logs"
 
+
+# ==========================================
+# QUESTION MODELS ADMIN CONFIGURATION
+# ==========================================
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
@@ -721,7 +679,7 @@ class QuestionAdmin(admin.ModelAdmin):
             'description': 'Options should be a JSON array for select type questions'
         }),
     )
-    
+
     def get_readonly_fields(self, request, obj=None):
         # Make order field editable but show it prominently
         return []
@@ -736,6 +694,10 @@ class QuestionAdmin(admin.ModelAdmin):
     examples_display.short_description = 'Examples'
 
 
+# ==========================================
+# LINKS MODELS ADMIN CONFIGURATION
+# ==========================================
+
 @admin.register(Signed_links)
 class SignedLinksAdmin(admin.ModelAdmin):
     """
@@ -746,7 +708,7 @@ class SignedLinksAdmin(admin.ModelAdmin):
     search_fields = ['email']
     readonly_fields = ['token', 'created_at', 'used_at']
     ordering = ['-created_at']
-    
+
     def status_display(self, obj):
         """Display colored status indicator"""
         if obj.used:
@@ -756,25 +718,25 @@ class SignedLinksAdmin(admin.ModelAdmin):
         else:
             return format_html('<span style="color: orange;">Expired</span>')
     status_display.short_description = 'Status'
-    
+
     def save_model(self, request, obj, form, change):
         """Override save to send email when creating new signed link"""
         is_new = obj._state.adding
         super().save_model(request, obj, form, change)
-        
+
         if is_new:
             # Send invitation email
             self.send_invitation_email(obj)
             messages.success(request, f"Signed link created and invitation email sent to {obj.email}")
-    
+
     def send_invitation_email(self, signed_link):
         """Send invitation email with signed link"""
         frontend_url = "https://www.searcherlist.com/"  # You can make this configurable
         # The signed link goes to profile-upload for validation, then redirects to the initial flow
         invitation_link = f"{frontend_url}/profile-upload?token={signed_link.token}&email={signed_link.email}"
-        
+
         subject = "You've been invited to SearcherList!"
-        
+
         message = f"""
 Hello,
 
@@ -788,18 +750,18 @@ This link will expire in 24 hours.
 Best regards,
 SearcherList Team
         """
-        
+
         html_message = f"""
 <html>
 <body>
     <h2>You've been invited to SearcherList!</h2>
-    
+
     <p>Hello,</p>
-    
+
     <p>You have been invited to join SearcherList!</p>
-    
+
     <p>Please click on the button below to get started:</p>
-    
+
     <div style="margin: 20px 0;">
         <a href="{invitation_link}" 
            style="background-color: #007bff; color: white; padding: 10px 20px; 
@@ -807,17 +769,17 @@ SearcherList Team
             Join SearcherList
         </a>
     </div>
-    
+
     <p>Or copy and paste this link in your browser:</p>
     <p><a href="{invitation_link}">{invitation_link}</a></p>
-    
+
     <p><strong>Note:</strong> This link will expire in 24 hours.</p>
-    
+
     <p>Best regards,<br>SearcherList Team</p>
 </body>
 </html>
         """
-        
+
         try:
             send_mail(
                 subject=subject,
@@ -832,6 +794,58 @@ SearcherList Team
             # You might want to log this error or handle it differently
 
 
+# ==========================================
+# OTP MODELS ADMIN CONFIGURATION
+# ==========================================
+
+@admin.register(OTP)
+class OTPAdmin(admin.ModelAdmin):
+    """
+    Admin interface for OTP model
+    """
+    list_display = [
+        'email', 'otp_code', 'user_exists', 'is_verified', 
+        'is_used', 'attempts', 'created_at', 'expires_at'
+    ]
+
+    list_filter = [
+        'user_exists', 'is_verified', 'is_used', 'created_at'
+    ]
+
+    search_fields = ['email', 'otp_code']
+
+    readonly_fields = [
+        'otp_code', 'created_at', 'expires_at', 'user_exists', 'user', 
+    ]
+
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('OTP Information', {
+            'fields': ('email', 'otp_code', 'user_exists', 'user')
+        }),
+        ('Verification Status', {
+            'fields': ('is_verified', 'is_used', 'attempts', 'max_attempts')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'expires_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def has_add_permission(self, request):
+        """Don't allow manual creation of OTPs through admin"""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Allow viewing but limited editing"""
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        """Allow deletion of expired/used OTPs"""
+        return True
+
+
 @admin.register(OTPVerification)
 class OTPVerificationAdmin(admin.ModelAdmin):
     """
@@ -842,7 +856,7 @@ class OTPVerificationAdmin(admin.ModelAdmin):
     search_fields = ['email', 'otp_code']
     readonly_fields = ['otp_code', 'created_at', 'expires_at', 'used_at']
     ordering = ['-created_at']
-    
+
     def is_valid_display(self, obj):
         """Display if the OTP is currently valid"""
         if obj.is_valid():
@@ -852,7 +866,7 @@ class OTPVerificationAdmin(admin.ModelAdmin):
         else:
             return format_html('<span style="color: orange;">✗ Expired</span>')
     is_valid_display.short_description = 'Status'
-    
+
     fieldsets = (
         ('OTP Information', {
             'fields': ('email', 'otp_code', 'signed_link')
@@ -866,7 +880,9 @@ class OTPVerificationAdmin(admin.ModelAdmin):
     )
 
 
-from .models import SupportTicket
+# ==========================================
+# SUPPORT MODELS ADMIN CONFIGURATION
+# ==========================================
 
 @admin.register(SupportTicket)
 class SupportTicketAdmin(admin.ModelAdmin):

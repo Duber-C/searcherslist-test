@@ -82,9 +82,6 @@ def unpublish_profile(request):
         )
 
     user.published = False
-
-
-
     user.save(update_fields=["published", "public_token"])
 
     return Response(

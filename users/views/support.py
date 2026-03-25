@@ -7,7 +7,9 @@ from rest_framework import status
 from users.models.support import SupportTicket
 from users.services.email import EmailService
 
+
 logger = logging.getLogger(__name__)
+
 
 @api_view(["POST"])
 def create_support_ticket(request):

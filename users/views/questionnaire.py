@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from users.serializers.question import QuestionSerializer
+from users.models.question import Question
 
 
 @api_view(['GET'])
@@ -48,7 +49,6 @@ def test_questionnaire_answers(request):
                 'message': 'Answers must be provided as a JSON object'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        from ..models import Question
         valid_question_ids = set(Question.objects.filter(is_active=True).values_list('id', flat=True))
 
         answered_questions = []

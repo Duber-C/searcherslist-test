@@ -16,12 +16,12 @@ User = get_user_model()
 def generate_otp(request):
     """
     Generate and send OTP to email address
-    
+
     Request body:
     {
         "email": "user@example.com"
     }
-    
+
     Response:
     {
         "success": true,
@@ -32,7 +32,7 @@ def generate_otp(request):
     """
     try:
         email = request.data.get('email')
-        
+
         if not email:
             return Response({
                 'success': False,
@@ -42,11 +42,11 @@ def generate_otp(request):
         # Create and send OTP
         otp_instance = OTP(email=email)
         otp_instance.save()
-        
+
         # Send email using EmailService
         email_service = EmailService()
         email_sent = email_service.send_otp_email(email, otp_instance.otp_code)
-        
+
         if email_sent:
             logger.info(f"OTP generated and sent successfully to {email}")
             return Response({
@@ -63,7 +63,7 @@ def generate_otp(request):
                 'message': 'Failed to send OTP email. Please try again.',
                 'error': 'Email delivery failed'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
     except Exception as e:
         logger.error(f"Error generating OTP for {email}: {str(e)}")
         return Response({
@@ -77,13 +77,13 @@ def generate_otp(request):
 def verify_otp(request):
     """
     Verify OTP code and return account status
-    
+
     Request body:
     {
         "email": "user@example.com",
         "otp_code": "123456"
     }
-    
+
     Response:
     {
         "success": true/false,
@@ -97,7 +97,7 @@ def verify_otp(request):
     try:
         email = request.data.get('email')
         otp_code = request.data.get('otp_code')
-        
+
         if not email or not otp_code:
             return Response({
                 'success': False,
@@ -162,7 +162,7 @@ def verify_otp(request):
         # Determine account status
         try:
             user = User.objects.get(email=email)
-            
+
             # Check if profile is complete using the new method
             if user.profile_completed and user.is_profile_complete():
                 account_status = "finished"
@@ -172,7 +172,7 @@ def verify_otp(request):
                 account_status = "incomplete"
                 next_action = "complete_profile"
                 message = "Email verified! Please complete your profile."
-                
+
             return Response({
                 'success': True,
                 'message': message,
@@ -181,7 +181,7 @@ def verify_otp(request):
                 'user_id': user.id,
                 'next_action': next_action
             }, status=status.HTTP_200_OK)
-            
+
         except User.DoesNotExist:
             # New user
             return Response({
