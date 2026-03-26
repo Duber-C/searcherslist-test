@@ -10,7 +10,7 @@ import os
 sys.path.append('/Users/lbz/Documents/ShareHolder/searcherlist/searcher-backend')
 
 # Django setup
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'searcher_api.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.prod')
 import django
 django.setup()
 

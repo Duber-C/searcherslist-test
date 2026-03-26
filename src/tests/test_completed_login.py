@@ -31,7 +31,7 @@ def test_completed_profile_login():
         
         import os, sys, django
         sys.path.append('/Users/lbz/Documents/ShareHolder/searcherlist/searcher-backend')
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'searcher_api.settings')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.prod')
         django.setup()
         
         from users.models import OTP

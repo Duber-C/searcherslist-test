@@ -17,3 +17,9 @@ m:
 
 admin:
 	docker compose -f ${file} run django python manage.py createsuperuser
+
+test:
+	docker compose -f ${file} run django python manage.py test
+
+loaddata:
+	docker compose -f ${file} run django python manage.py loaddata fixture.json

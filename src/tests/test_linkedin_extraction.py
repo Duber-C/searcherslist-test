@@ -5,7 +5,7 @@ import sys
 import django
 
 # Django setup
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'searcher_api.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.prod')
 django.setup()
 
 from linkedIn_extraction import run_linkedin_extraction

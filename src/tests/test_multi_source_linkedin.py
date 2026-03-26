@@ -5,7 +5,7 @@ import sys
 import django
 
 # Django setup
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'searcher_api.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.prod')
 django.setup()
 
 def test_multi_source_with_linkedin():

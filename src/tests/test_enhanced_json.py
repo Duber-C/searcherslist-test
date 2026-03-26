@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import django
 from django.conf import settings
 if not settings.configured:
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'searcher_api.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.prod')
     django.setup()
 
 # Test the enhanced JSON parsing
