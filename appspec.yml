@@ -1,0 +1,32 @@
+version: 0.0
+os: linux
+
+files:
+  - source: /src
+    destination: /app/src
+  - source: /requirements.txt
+    destination: /app/requirements.txt
+
+permissions:
+  - object: /app
+    owner: django
+    group: django
+    type:
+      - directory
+      - file
+
+hooks:
+  AfterInstall:
+    - location: deploy/scripts/after_install.sh
+      timeout: 120
+      runas: root
+
+  ApplicationStart:
+    - location: deploy/scripts/start_app.sh
+      timeout: 60
+      runas: root
+
+  ValidateService:
+    - location: deploy/scripts/validate.sh
+      timeout: 30
+      runas: root
