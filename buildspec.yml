@@ -12,8 +12,6 @@ env:
     CHAT_GPT_SECRET_KEY: placeholder
     OPENAI_API_KEY: placeholder
     EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
-    AWS_ACCESS_KEY_ID: placeholder
-    AWS_SECRET_ACCESS_KEY: placeholder
 
 phases:
   install:
