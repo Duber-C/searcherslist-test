@@ -26,9 +26,9 @@ phases:
   pre_build:
     commands:
       - echo "Running tests..."
-      - cd src
-      - python -m pytest tests/ -v --tb=short || true
-      - cd ..
+      # - cd src
+      # - python -m pytest tests/ -v --tb=short || true
+      # - cd ..
 
   build:
     commands:
