@@ -7,8 +7,8 @@ set -e
 ##############################################################################
 
 # ---------- System packages ----------
-dnf update -y
-dnf install -y python3.11 python3.11-pip python3.11-devel \
+yum update -y
+yum install -y python3.11 python3.11-pip python3.11-devel \
   nginx git postgresql15 ruby wget
 
 # Install CodeDeploy agent
