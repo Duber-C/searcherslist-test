@@ -6,6 +6,10 @@ files:
     destination: /app/src
   - source: /requirements.txt
     destination: /app
+  - source: /prod.yml
+    destination: /app
+  - source: /compose
+    destination: /app/compose
 
 permissions:
   - object: /app

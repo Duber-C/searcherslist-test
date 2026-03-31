@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "==> Restarting Gunicorn..."
-systemctl daemon-reload
-systemctl restart gunicorn
-
-echo "==> Reloading Nginx..."
-systemctl reload nginx
+echo "==> Starting application with Docker Compose..."
+cd /app
+docker compose -f prod.yml up -d --build
