@@ -8,6 +8,7 @@ pip install -r /app/requirements.txt
 
 echo "==> Running database migrations..."
 cd /app/src
+set -a; source /app/.env.production; set +a
 DJANGO_SETTINGS_MODULE=config.settings.prod \
   python manage.py migrate --noinput
 
