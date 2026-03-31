@@ -16,7 +16,7 @@ COPY ./compose/start-celery /start-celery
 RUN sed -i 's/\r$//g' /start-django /start-celery && chmod +x /start-django /start-celery 
 
 # Copy project files
-COPY ./src ./app
+COPY ./src .
 
 RUN mkdir -p ./static 
 RUN mkdir -p ./media
