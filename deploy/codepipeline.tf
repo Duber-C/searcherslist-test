@@ -85,6 +85,17 @@ resource "aws_codebuild_project" "django" {
 }
 
 ##############################################################################
+# CodeStar Connection — GitHub v2
+##############################################################################
+
+resource "aws_codestarconnections_connection" "github" {
+  name          = "${var.project_name}-${var.environment}-github"
+  provider_type = "GitHub"
+
+  tags = { Name = "${var.project_name}-${var.environment}-github-connection" }
+}
+
+##############################################################################
 # CodePipeline
 ##############################################################################
 
@@ -104,17 +115,16 @@ resource "aws_codepipeline" "django" {
     action {
       name             = "GitHub_Source"
       category         = "Source"
-      owner            = "ThirdParty"
-      provider         = "GitHub"
+      owner            = "AWS"
+      provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["source_output"]
 
       configuration = {
-        Owner                = var.github_owner
-        Repo                 = var.github_repo
-        Branch               = var.github_branch
-        OAuthToken           = var.github_oauth_token
-        PollForSourceChanges = false # webhook is created below
+        ConnectionArn        = aws_codestarconnections_connection.github.arn
+        FullRepositoryId     = "${var.github_owner}/${var.github_repo}"
+        BranchName           = var.github_branch
+        OutputArtifactFormat = "CODE_ZIP"
       }
     }
   }
@@ -158,22 +168,3 @@ resource "aws_codepipeline" "django" {
   }
 }
 
-##############################################################################
-# GitHub Webhook (triggers pipeline on push instead of polling)
-##############################################################################
-
-resource "aws_codepipeline_webhook" "github" {
-  name            = "${var.project_name}-${var.environment}-github-webhook"
-  authentication  = "GITHUB_HMAC"
-  target_action   = "GitHub_Source"
-  target_pipeline = aws_codepipeline.django.name
-
-  authentication_configuration {
-    secret_token = var.github_oauth_token
-  }
-
-  filter {
-    json_path    = "$.ref"
-    match_equals = "refs/heads/${var.github_branch}"
-  }
-}

@@ -5,7 +5,7 @@ files:
   - source: /src
     destination: /app/src
   - source: /requirements.txt
-    destination: /app/requirements.txt
+    destination: /app
 
 permissions:
   - object: /app

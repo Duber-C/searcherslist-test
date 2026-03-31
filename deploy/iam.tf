@@ -180,6 +180,11 @@ resource "aws_iam_role_policy" "codepipeline" {
       },
       {
         Effect   = "Allow"
+        Action   = ["codestar-connections:UseConnection"]
+        Resource = aws_codestarconnections_connection.github.arn
+      },
+      {
+        Effect   = "Allow"
         Action   = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"]
         Resource = "*"
       },
