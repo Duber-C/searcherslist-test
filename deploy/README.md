@@ -259,8 +259,11 @@ compose/
 ## Useful Commands
 
 ```bash
-# SSH into the EC2 instance
-ssh -i ~/.ssh/your-key.pem ec2-user@$(terraform output -raw ec2_public_ip)
+# Connect to the EC2 instance via SSM (no SSH key needed, port 22 is closed)
+aws ssm start-session --target $(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=searcherlist-prod-django" \
+  --query "Reservations[0].Instances[0].InstanceId" \
+  --output text --region us-east-1) --region us-east-1
 
 # View Django container logs
 docker compose -f /app/prod.yml logs -f django
