@@ -1,18 +1,4 @@
 services:
-  db:
-    image: "postgres:18"
-    restart: unless-stopped
-    env_file:
-      - .env.db
-    volumes:
-      - postgres_data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d $$POSTGRES_DB"]
-      interval: 3s
-      timeout: 5s
-      retries: 10
-      start_period: 2s
-
   django:
     build:
       context: .
@@ -23,12 +9,8 @@ services:
       - ./staticfiles:/app/staticfiles
       - ./media:/app/media
       - ./src:/app
-    depends_on:
-      db:
-        condition: service_healthy
     env_file:
       - .env.production
-      - .env.db
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.prod
 
@@ -43,6 +25,3 @@ services:
       - ./media:/app/media:ro
     depends_on:
       - django
-
-volumes:
-  postgres_data: {}

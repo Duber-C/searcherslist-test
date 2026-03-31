@@ -4,15 +4,8 @@ set -e
 echo "==> Validating service is up..."
 sleep 3
 
-# Check gunicorn socket exists
-if [ ! -S /run/gunicorn.sock ]; then
-  echo "ERROR: gunicorn socket not found"
-  exit 1
-fi
-
-# Check nginx is running
-if ! systemctl is-active --quiet nginx; then
-  echo "ERROR: nginx is not running"
+if ! docker compose -f /app/prod.yml ps django | grep -q "Up"; then
+  echo "ERROR: django container is not running"
   exit 1
 fi
 

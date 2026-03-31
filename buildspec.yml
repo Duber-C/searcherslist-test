@@ -16,7 +16,7 @@ env:
 phases:
   install:
     runtime-versions:
-      python: 3.11
+      python: 3.14
     commands:
       - pip install --upgrade pip
       - pip install -r requirements.txt
@@ -36,7 +36,7 @@ phases:
       - python manage.py collectstatic --noinput
       - cd ..
       - echo "Syncing static files to S3..."
-      - aws s3 sync src/staticfiles/ s3://$STATIC_BUCKET/ --delete --cache-control "max-age=86400"
+      - aws s3 sync src/staticfiles/ s3://$STATICFILES_BUCKET/ --delete --cache-control "max-age=86400"
 
   post_build:
     commands:
