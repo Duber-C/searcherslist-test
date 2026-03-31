@@ -3,6 +3,16 @@ set -e
 
 source /app/deploy/.image
 
+echo "==> Refreshing secrets from Secrets Manager..."
+REGION=$(aws configure get region 2>/dev/null || echo "us-east-1")
+aws secretsmanager get-secret-value \
+  --secret-id "searcherlist-prod-app-secrets" \
+  --region "$REGION" \
+  --query SecretString \
+  --output text \
+  | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /app/.env.production
+chmod 600 /app/.env.production
+
 echo "==> Logging into ECR..."
 REGION=$(aws configure get region || echo "us-east-1")
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)

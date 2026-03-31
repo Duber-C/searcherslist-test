@@ -8,7 +8,7 @@ set -e
 
 # ---------- System packages ----------
 dnf update -y
-dnf install -y git ruby wget
+dnf install -y git ruby wget jq
 
 # ---------- Docker ----------
 dnf install -y docker
@@ -35,27 +35,13 @@ usermod -aG docker django
 mkdir -p /app/src /app/staticfiles /app/media /app/compose
 chown -R django:django /app
 
-# ---------- Environment file (.env.production) ----------
-cat > /app/.env.production <<EOF
-SECRET_KEY=${django_secret}
-DEBUG=False
-ALLOWED_HOSTS=${allowed_hosts}
-CORS_ALLOWED_ORIGINS=${cors_origins}
-CSRF_TRUSTED_ORIGINS=https://${allowed_hosts}
+# ---------- Fetch secrets from Secrets Manager ----------
+aws secretsmanager get-secret-value \
+  --secret-id "${secret_name}" \
+  --region "${aws_region}" \
+  --query SecretString \
+  --output text \
+  | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /app/.env.production
 
-POSTGRES_DB=${db_name}
-POSTGRES_USER=${db_user}
-POSTGRES_PASSWORD=${db_password}
-POSTGRES_HOST=${db_host}
-POSTGRES_PORT=${db_port}
-
-AWS_STORAGE_BUCKET_NAME=${media_bucket}
-AWS_S3_CUSTOM_DOMAIN=
-AWS_S3_REGION_NAME=${aws_region}
-
-STATICFILES_BUCKET=${static_bucket}
-
-OPENAI_API_KEY=${openai_api_key}
-EOF
 chmod 600 /app/.env.production
 chown django:django /app/.env.production

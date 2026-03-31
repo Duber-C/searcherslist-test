@@ -89,6 +89,20 @@ resource "aws_iam_role_policy" "ec2_ecr" {
   })
 }
 
+resource "aws_iam_role_policy" "ec2_secrets" {
+  name = "${var.project_name}-${var.environment}-ec2-secrets-policy"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = aws_secretsmanager_secret.app.arn
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-${var.environment}-ec2-profile"
   role = aws_iam_role.ec2.name
