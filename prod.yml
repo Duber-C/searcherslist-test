@@ -1,8 +1,6 @@
 services:
   django:
-    build:
-      context: .
-      dockerfile: compose/Dockerfile
+    image: ${ECR_IMAGE}
     command: /start-django
     restart: unless-stopped
     volumes:

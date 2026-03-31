@@ -2,41 +2,25 @@ version: 0.2
 
 env:
   variables:
-    DJANGO_SETTINGS_MODULE: config.settings.prod
-    SECRET_KEY: build-phase-placeholder
-    POSTGRES_HOST: localhost
-    POSTGRES_DB: placeholder
-    POSTGRES_USER: placeholder
-    POSTGRES_PASSWORD: placeholder
-    POSTGRES_PORT: "5432"
-    CHAT_GPT_SECRET_KEY: placeholder
-    OPENAI_API_KEY: placeholder
-    EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+    ECR_REPO_NAME: searchers-backend
 
 phases:
-  install:
-    runtime-versions:
-      python: 3.14
-    commands:
-      - pip install --upgrade pip
-      - pip install -r requirements.txt
-
   pre_build:
     commands:
-      - echo "Running tests..."
+      - echo "Logging into ECR..."
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - ECR_REPO=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME
+      - IMAGE_TAG=$CODEBUILD_RESOLVED_SOURCE_VERSION
       # - cd src
       # - python -m pytest tests/ -v --tb=short || true
       # - cd ..
 
   build:
     commands:
-      - echo "Collecting static files..."
-      - mkdir -p src/staticfiles
-      - cd src
-      - python manage.py collectstatic --noinput
-      - cd ..
-      - echo "Syncing static files to S3..."
-      - aws s3 sync src/staticfiles/ s3://$STATICFILES_BUCKET/ --delete --cache-control "max-age=86400"
+      - echo "Building Docker image..."
+      - docker build -t $ECR_REPO:$IMAGE_TAG -f compose/Dockerfile .
+      - docker push $ECR_REPO:$IMAGE_TAG
+      - echo "ECR_IMAGE=$ECR_REPO:$IMAGE_TAG" > deploy/.image
 
   post_build:
     commands:
