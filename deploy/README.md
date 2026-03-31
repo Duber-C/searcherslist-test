@@ -1,6 +1,6 @@
 # Searcherlist — AWS Infrastructure (Terraform)
 
-Deploys the Django backend to AWS using EC2, RDS, S3, and CodePipeline.
+Deploys the Django backend to AWS using EC2, RDS, S3, ECR, and CodePipeline.
 
 ---
 
@@ -10,24 +10,25 @@ Deploys the Django backend to AWS using EC2, RDS, S3, and CodePipeline.
 GitHub
   │
   └── CodePipeline
-        ├── CodeBuild  →  runs tests, syncs staticfiles/ to S3
-        └── CodeDeploy →  deploys code to EC2, runs migrations, restarts gunicorn
+        ├── CodeBuild  →  builds Docker image, pushes to ECR
+        └── CodeDeploy →  pulls image from ECR, runs migrations + collectstatic, starts containers
 
-EC2 (Django + Gunicorn + Nginx)
+EC2 (Docker Compose — Django + Gunicorn + Nginx)
   ├── reads/writes  →  S3 media bucket      (private)
-  ├── serves from   →  S3 static bucket     (public-read)
+  ├── collectstatic →  S3 static bucket     (public-read, via django-storages)
   └── connects to   →  RDS PostgreSQL       (private subnet)
 ```
 
 | Resource | Purpose |
 |---|---|
-| **EC2** (`t3.small`) | Django app server — Gunicorn + Nginx |
+| **EC2** (`t3.small`) | Runs Docker Compose: Django/Gunicorn + Nginx containers |
+| **ECR** | Stores built Docker images |
 | **RDS** PostgreSQL 16 | Application database (private subnet, encrypted) |
 | **S3** `searcherlist-media-prod` | User-uploaded media files (private) |
-| **S3** `searcherlist-static-prod` | Collected static files (public-read) |
+| **S3** `searcherlist-static-prod` | Collected static files (public-read, via django-storages) |
 | **CodePipeline** | CI/CD — triggered on push to `main` |
-| **CodeBuild** | Runs tests, collectstatic, syncs to S3 |
-| **CodeDeploy** | Deploys artifact to EC2, runs migrations |
+| **CodeBuild** | Builds Docker image, pushes to ECR |
+| **CodeDeploy** | Deploys to EC2 — pulls image, runs collectstatic + migrate, starts containers |
 | **VPC** | Isolated network with public + private subnets across 2 AZs |
 
 ---
@@ -43,7 +44,17 @@ EC2 (Django + Gunicorn + Nginx)
 
 ## Deployment Steps
 
-### 1. Configure variables
+### 1. Create an ECR repository
+
+```bash
+aws ecr create-repository --repository-name searchers-backend --region us-east-1
+```
+
+Note the repository URI from the output — you'll need it in step 3.
+
+---
+
+### 2. Configure Terraform variables
 
 ```bash
 cd deploy/
@@ -85,27 +96,74 @@ github_oauth_token = "ghp_..."
 
 ---
 
-### 2. Initialize Terraform
+### 3. Set ECR repo name in buildspec
+
+In `buildspec.yml`, update the `ECR_REPO_NAME` variable to match the repository name you created in step 1:
+
+```yaml
+env:
+  variables:
+    ECR_REPO_NAME: searchers-backend  # update this if you used a different name
+```
+
+---
+
+### 4. Grant CodeBuild permissions to push to ECR
+
+The CodeBuild IAM role needs the following ECR permissions:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "ecr:GetAuthorizationToken",
+    "ecr:BatchCheckLayerAvailability",
+    "ecr:InitiateLayerUpload",
+    "ecr:UploadLayerPart",
+    "ecr:CompleteLayerUpload",
+    "ecr:PutImage"
+  ],
+  "Resource": "*"
+}
+```
+
+Add this to the CodeBuild IAM role in `iam.tf` or via the AWS Console.
+
+---
+
+### 5. Create `.env.production` on the EC2 instance
+
+SSH into the instance and create `/app/.env.production` with all required environment variables:
+
+```bash
+ssh -i ~/.ssh/your-key.pem ec2-user@<ec2_public_ip>
+sudo nano /app/.env.production
+```
+
+Required variables:
+
+```env
+DJANGO_SETTINGS_MODULE=config.settings.prod
+SECRET_KEY=your-django-secret-key
+POSTGRES_HOST=<rds-endpoint>
+POSTGRES_DB=searcherlist
+POSTGRES_USER=searcherlist
+POSTGRES_PASSWORD=strong-password-here
+POSTGRES_PORT=5432
+OPENAI_API_KEY=sk-...
+AWS_STORAGE_BUCKET_NAME=searcherlist-static-prod
+AWS_S3_REGION_NAME=us-east-1
+```
+
+> For a more secure approach, pull secrets from AWS Secrets Manager or Parameter Store in `deploy/scripts/after_install.sh` instead of maintaining a file on disk.
+
+---
+
+### 6. Initialize and apply Terraform
 
 ```bash
 terraform init
-```
-
----
-
-### 3. Review the plan
-
-```bash
-terraform plan
-```
-
-Review the output to confirm resources before creating anything.
-
----
-
-### 4. Apply
-
-```bash
+terraform plan   # review before applying
 terraform apply
 ```
 
@@ -113,9 +171,9 @@ Type `yes` when prompted. This will take ~5–10 minutes (RDS takes the longest)
 
 ---
 
-### 5. Point your DNS
+### 7. Point your DNS
 
-After apply completes, grab the Elastic IP from the output:
+After apply completes, grab the Elastic IP:
 
 ```bash
 terraform output ec2_public_ip
@@ -129,16 +187,39 @@ Create an **A record** in your DNS provider:
 
 ---
 
-### 6. Trigger the first deployment
+### 8. Trigger the first deployment
 
 Push to the `main` branch (or re-run the pipeline manually in the AWS Console under **CodePipeline**). The pipeline will:
 
 1. Pull source from GitHub
-2. Run tests via CodeBuild
-3. Sync `staticfiles/` to S3
-4. Deploy code to EC2 via CodeDeploy
-5. Run `python manage.py migrate`
-6. Restart Gunicorn
+2. Build the Docker image via CodeBuild
+3. Push the image to ECR
+4. Deploy to EC2 via CodeDeploy:
+   - Pull the new image from ECR
+   - Run `collectstatic` (uploads to S3)
+   - Run `migrate`
+   - Start Django + Nginx containers via Docker Compose
+
+---
+
+## Deploy flow per commit
+
+```
+git push origin main
+  │
+  ├── CodeBuild
+  │     ├── docker build -f compose/Dockerfile
+  │     ├── docker push → ECR
+  │     └── writes image URI to deploy/.image
+  │
+  └── CodeDeploy (on EC2)
+        ├── AfterInstall:
+        │     ├── docker pull <image>
+        │     ├── docker run → collectstatic
+        │     └── docker run → migrate
+        └── ApplicationStart:
+              └── docker compose up -d  (Django + Nginx)
+```
 
 ---
 
@@ -156,16 +237,21 @@ deploy/
 ├── rds.tf                    # RDS PostgreSQL instance and subnet group
 ├── ec2.tf                    # EC2 instance and Elastic IP
 ├── codepipeline.tf           # CodeDeploy, CodeBuild, CodePipeline, GitHub webhook
-├── user_data.sh              # EC2 bootstrap: installs nginx, gunicorn, CodeDeploy agent
+├── user_data.sh              # EC2 bootstrap: installs Docker, Docker Compose, CodeDeploy agent
 ├── scripts/
-│   ├── after_install.sh      # pip install, migrate, collectstatic (runs on EC2 via CodeDeploy)
-│   ├── start_app.sh          # restart gunicorn, reload nginx
-│   └── validate.sh           # health check after deploy
+│   ├── after_install.sh      # pulls image, runs collectstatic + migrate
+│   └── start_app.sh          # docker compose up
 └── terraform.tfvars.example  # Template for your tfvars
 
 # Repo root (used by CodePipeline):
-buildspec.yml                 # CodeBuild instructions
-appspec.yml                   # CodeDeploy instructions
+buildspec.yml                 # CodeBuild: builds and pushes Docker image to ECR
+appspec.yml                   # CodeDeploy: lifecycle hooks
+prod.yml                      # Docker Compose config for production
+compose/
+├── Dockerfile                # Django app image
+├── start-django              # Container entrypoint: starts Gunicorn
+├── start-celery              # Container entrypoint: starts Celery
+└── nginx.conf                # Nginx config
 ```
 
 ---
@@ -176,14 +262,22 @@ appspec.yml                   # CodeDeploy instructions
 # SSH into the EC2 instance
 ssh -i ~/.ssh/your-key.pem ec2-user@$(terraform output -raw ec2_public_ip)
 
-# View Gunicorn logs on the server
-sudo journalctl -u gunicorn -f
+# View Django container logs
+docker compose -f /app/prod.yml logs -f django
 
-# View Nginx logs on the server
-sudo tail -f /var/log/nginx/error.log
+# View Nginx container logs
+docker compose -f /app/prod.yml logs -f nginx
 
-# Manually run a migration on the server
-sudo -u django bash -c "source /app/venv/bin/activate && cd /app/src && python manage.py migrate"
+# Manually run a migration
+source /app/deploy/.image
+docker run --rm --env-file /app/.env.production $ECR_IMAGE python manage.py migrate
+
+# Open a Django shell
+source /app/deploy/.image
+docker run --rm -it --env-file /app/.env.production $ECR_IMAGE python manage.py shell
+
+# Restart containers
+cd /app && docker compose -f prod.yml restart
 
 # Destroy all infrastructure (irreversible — prompts for confirmation)
 terraform destroy
@@ -194,6 +288,7 @@ terraform destroy
 ## Notes
 
 - **RDS deletion protection** is enabled by default. You must disable it in `rds.tf` before running `terraform destroy`.
-- The **media bucket** is private. To serve media files directly from S3 (instead of through Django), configure `django-storages` with pre-signed URLs.
-- The **static bucket** is public-read. Update `STATIC_URL` in your Django settings to point to the bucket URL shown in `terraform output static_bucket_url`.
+- **Static files** are uploaded to S3 by `collectstatic` at deploy time (not served by Nginx). Configure `django-storages` with `AWS_STORAGE_BUCKET_NAME` and `STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'` in your prod settings.
+- **Media files** are private. Configure `django-storages` with pre-signed URLs to serve them through Django.
 - To store Terraform state remotely (recommended for teams), uncomment the `backend "s3"` block in `main.tf` and create the state bucket first.
+- The `.image` file written by CodeBuild contains the exact ECR image URI used for the current deployment. It is sourced by all deploy scripts to ensure consistency.

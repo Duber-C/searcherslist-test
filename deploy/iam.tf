@@ -65,6 +65,30 @@ resource "aws_iam_role_policy_attachment" "ec2_codedeploy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
 }
 
+resource "aws_iam_role_policy" "ec2_ecr" {
+  name = "${var.project_name}-${var.environment}-ec2-ecr-policy"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+        ]
+        Resource = "arn:aws:ecr:*:*:repository/searchers-backend"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-${var.environment}-ec2-profile"
   role = aws_iam_role.ec2.name
@@ -114,9 +138,20 @@ resource "aws_iam_role_policy" "codebuild" {
         ]
       },
       {
-        Effect   = "Allow"
-        Action   = ["ecr:GetAuthorizationToken"]
+        Effect = "Allow"
+        Action = ["ecr:GetAuthorizationToken"]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage",
+        ]
+        Resource = "arn:aws:ecr:*:*:repository/searchers-backend"
       }
     ]
   })
