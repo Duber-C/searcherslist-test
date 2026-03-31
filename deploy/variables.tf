@@ -58,7 +58,7 @@ variable "ec2_key_pair_name" {
 variable "ec2_ami_id" {
   description = "AMI ID for the EC2 instance (Amazon Linux 2023 recommended)"
   type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2023, us-east-1
+  default     = "ami-0cb5cf49019e79c51" # Amazon Linux 2023, us-east-1
 }
 
 # --- RDS ---
@@ -143,12 +143,6 @@ variable "github_branch" {
   description = "Branch that triggers the pipeline"
   type        = string
   default     = "main"
-}
-
-variable "github_oauth_token" {
-  description = "GitHub personal access token with repo + admin:repo_hook scopes"
-  type        = string
-  sensitive   = true
 }
 
 # --- S3 ---
