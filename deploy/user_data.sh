@@ -7,9 +7,9 @@ set -e
 ##############################################################################
 
 # ---------- System packages ----------
-yum update -y
-yum install -y python3.11 python3.11-pip python3.11-devel \
-  nginx git postgresql15 ruby wget
+dnf update -y
+dnf install -y python3.14 python3.14-pip python3.14-devel \
+  nginx git postgresql16 ruby wget
 
 # Install CodeDeploy agent
 cd /tmp
@@ -25,7 +25,7 @@ mkdir -p /app/src /app/staticfiles /app/media
 chown -R django:django /app
 
 # ---------- Virtual env ----------
-python3.11 -m venv /app/venv
+python3.14 -m venv /app/venv
 source /app/venv/bin/activate
 pip install --upgrade pip gunicorn
 
