@@ -16,21 +16,9 @@ resource "aws_instance" "django" {
     encrypted   = true
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    project_name    = var.project_name
-    environment     = var.environment
-    db_host         = aws_db_instance.postgres.address
-    db_port         = aws_db_instance.postgres.port
-    db_name         = var.db_name
-    db_user         = var.db_username
-    db_password     = var.db_password
-    django_secret   = var.django_secret_key
-    allowed_hosts   = var.django_allowed_hosts
-    cors_origins    = var.cors_allowed_origins
-    media_bucket    = var.media_bucket_name
-    static_bucket   = var.static_bucket_name
-    aws_region      = var.aws_region
-    openai_api_key  = var.openai_api_key
+  user_data_base64 = base64encode(templatefile("${path.module}/user_data.sh", {
+    secret_name = aws_secretsmanager_secret.app.name
+    aws_region  = var.aws_region
   }))
 
   tags = { Name = "${var.project_name}-${var.environment}-django" }

@@ -8,9 +8,10 @@ phases:
   pre_build:
     commands:
       - echo "Logging into ECR..."
-      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
       - ECR_REPO=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME
       - IMAGE_TAG=$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       # - cd src
       # - python -m pytest tests/ -v --tb=short || true
       # - cd ..
@@ -18,6 +19,9 @@ phases:
   build:
     commands:
       - echo "Building Docker image..."
+      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_REPO=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME
+      - IMAGE_TAG=$CODEBUILD_RESOLVED_SOURCE_VERSION
       - docker build -t $ECR_REPO:$IMAGE_TAG -f compose/Dockerfile .
       - docker push $ECR_REPO:$IMAGE_TAG
       - echo "ECR_IMAGE=$ECR_REPO:$IMAGE_TAG" > deploy/.image
