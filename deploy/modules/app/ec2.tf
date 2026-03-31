@@ -19,6 +19,7 @@ resource "aws_instance" "django" {
   user_data_base64 = base64encode(templatefile("${path.module}/user_data.sh", {
     secret_name = aws_secretsmanager_secret.app.name
     aws_region  = var.aws_region
+    environment = var.environment
   }))
 
   tags = { Name = "${var.project_name}-${var.environment}-django" }

@@ -1,7 +1,6 @@
 variable "aws_region" {
   description = "AWS region to deploy into"
   type        = string
-  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -11,9 +10,12 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (prod, staging)"
+  description = "Deployment environment (dev or prod)"
   type        = string
-  default     = "prod"
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "Must be 'dev' or 'prod'."
+  }
 }
 
 # --- Networking ---
@@ -21,25 +23,21 @@ variable "environment" {
 variable "vpc_cidr" {
   description = "CIDR block for the VPC"
   type        = string
-  default     = "10.0.0.0/16"
 }
 
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets (one per AZ)"
   type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
 variable "private_subnet_cidrs" {
   description = "CIDR blocks for private subnets (one per AZ, used by RDS)"
   type        = list(string)
-  default     = ["10.0.11.0/24", "10.0.12.0/24"]
 }
 
 variable "availability_zones" {
   description = "Availability zones to use (must match subnet count)"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
 }
 
 # --- EC2 ---
@@ -47,7 +45,6 @@ variable "availability_zones" {
 variable "ec2_instance_type" {
   description = "EC2 instance type for the Django app server"
   type        = string
-  default     = "t3.small"
 }
 
 variable "ec2_key_pair_name" {
@@ -59,6 +56,20 @@ variable "ec2_ami_id" {
   description = "AMI ID for the EC2 instance (Amazon Linux 2023 recommended)"
   type        = string
   default     = "ami-0cb5cf49019e79c51" # Amazon Linux 2023, us-east-1
+}
+
+# --- Security ---
+
+variable "allowed_ssh_cidrs" {
+  description = "CIDRs allowed to SSH into the EC2 instance. Empty list disables SSH access."
+  type        = list(string)
+  default     = []
+}
+
+variable "allowed_db_cidrs" {
+  description = "CIDRs allowed to connect to RDS directly (e.g. 0.0.0.0/0 for dev). Empty disables public DB access."
+  type        = list(string)
+  default     = []
 }
 
 # --- RDS ---
@@ -76,7 +87,7 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "PostgreSQL master password — store in terraform.tfvars or AWS Secrets Manager"
+  description = "PostgreSQL master password"
   type        = string
   sensitive   = true
 }
@@ -84,7 +95,6 @@ variable "db_password" {
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.micro"
 }
 
 variable "db_allocated_storage" {
@@ -99,6 +109,12 @@ variable "db_multi_az" {
   default     = false
 }
 
+variable "rds_publicly_accessible" {
+  description = "Make RDS publicly accessible. Enable in dev to allow connections from local."
+  type        = bool
+  default     = false
+}
+
 # --- Django App ---
 
 variable "django_secret_key" {
@@ -107,16 +123,20 @@ variable "django_secret_key" {
   sensitive   = true
 }
 
+variable "django_debug" {
+  description = "Enable Django DEBUG mode. Should be false in prod."
+  type        = bool
+  default     = false
+}
+
 variable "django_allowed_hosts" {
   description = "Space-separated list of ALLOWED_HOSTS"
   type        = string
-  default     = "api.searcherlist.com"
 }
 
 variable "cors_allowed_origins" {
   description = "Comma-separated CORS_ALLOWED_ORIGINS"
   type        = string
-  default     = "https://www.searcherlist.com"
 }
 
 variable "openai_api_key" {
@@ -142,7 +162,6 @@ variable "github_repo" {
 variable "github_branch" {
   description = "Branch that triggers the pipeline"
   type        = string
-  default     = "main"
 }
 
 # --- S3 ---
@@ -150,11 +169,9 @@ variable "github_branch" {
 variable "media_bucket_name" {
   description = "S3 bucket name for Django media files (must be globally unique)"
   type        = string
-  default     = "searcherlist-media-prod"
 }
 
 variable "static_bucket_name" {
   description = "S3 bucket name for Django static files (must be globally unique)"
   type        = string
-  default     = "searcherlist-static-prod"
 }

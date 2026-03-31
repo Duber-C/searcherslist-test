@@ -53,13 +53,11 @@ resource "aws_iam_role_policy" "ec2_s3" {
   })
 }
 
-# Allow SSM Session Manager (optional but useful as SSH alternative)
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# Allow CodeDeploy agent on the instance
 resource "aws_iam_role_policy_attachment" "ec2_codedeploy" {
   role       = aws_iam_role.ec2.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"

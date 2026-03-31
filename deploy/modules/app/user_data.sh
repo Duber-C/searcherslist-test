@@ -35,6 +35,15 @@ usermod -aG docker django
 mkdir -p /app/src /app/staticfiles /app/media /app/compose
 chown -R django:django /app
 
+# ---------- Write deploy config for use by CodeDeploy hooks ----------
+cat > /app/.deploy-config <<EOF
+SECRET_NAME=${secret_name}
+AWS_REGION=${aws_region}
+ENVIRONMENT=${environment}
+EOF
+chmod 600 /app/.deploy-config
+chown django:django /app/.deploy-config
+
 # ---------- Fetch secrets from Secrets Manager ----------
 aws secretsmanager get-secret-value \
   --secret-id "${secret_name}" \

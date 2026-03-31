@@ -30,7 +30,7 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   multi_az                  = var.db_multi_az
-  publicly_accessible       = false
+  publicly_accessible       = var.rds_publicly_accessible
   deletion_protection       = false
   skip_final_snapshot       = true
   final_snapshot_identifier = "${var.project_name}-${var.environment}-final-snapshot"

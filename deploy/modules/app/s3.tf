@@ -37,7 +37,7 @@ resource "aws_s3_bucket_cors_configuration" "media" {
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "PUT", "POST"]
-    allowed_origins = ["https://www.searcherlist.com"]
+    allowed_origins = [var.cors_allowed_origins]
     max_age_seconds = 3000
   }
 }

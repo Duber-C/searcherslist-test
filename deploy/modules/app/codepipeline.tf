@@ -34,7 +34,7 @@ resource "aws_codedeploy_deployment_group" "django" {
 }
 
 ##############################################################################
-# CodeBuild — runs tests, collectstatic, and packages the artifact
+# CodeBuild
 ##############################################################################
 
 resource "aws_cloudwatch_log_group" "codebuild" {
@@ -68,6 +68,11 @@ resource "aws_codebuild_project" "django" {
       name  = "AWS_DEFAULT_REGION"
       value = var.aws_region
     }
+
+    environment_variable {
+      name  = "ENVIRONMENT"
+      value = var.environment
+    }
   }
 
   source {
@@ -77,8 +82,8 @@ resource "aws_codebuild_project" "django" {
 
   logs_config {
     cloudwatch_logs {
-      group_name  = aws_cloudwatch_log_group.codebuild.name
-      status      = "ENABLED"
+      group_name = aws_cloudwatch_log_group.codebuild.name
+      status     = "ENABLED"
     }
   }
 
@@ -168,4 +173,3 @@ resource "aws_codepipeline" "django" {
     }
   }
 }
-

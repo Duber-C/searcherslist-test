@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and fill in values.
+# NEVER commit terraform.tfvars — it contains secrets.
+
+aws_region        = "us-east-1"
+ec2_key_pair_name = "your-key-pair-name"
+github_owner      = "your-github-username-or-org"
+github_repo       = "searchers-backend"
+github_branch     = "main"
+
+# Secrets
+db_password       = "CHANGE_ME_strong_password"
+django_secret_key = "CHANGE_ME_django_secret_key"
+openai_api_key    = ""
